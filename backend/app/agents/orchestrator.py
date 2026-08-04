@@ -28,6 +28,21 @@ OUT_OF_SCOPE = (
     '"What is the groundwater status in Bathinda?"'
 )
 
+# Answering a drinking-safety question with an extraction category would be
+# actively misleading, so it gets its own refusal that explains the difference.
+NO_QUALITY_DATA = (
+    "I cannot answer that. This dataset covers how much groundwater there is - "
+    "water levels and CGWB's extraction categories - and contains no water "
+    "quality measurements at all.\n\n"
+    "In particular, \"over-exploited\" describes extraction outstripping "
+    "recharge. It says nothing about whether water is safe to drink. Treating "
+    "the two as the same would be misleading, so I will not.\n\n"
+    "For contamination data, see CGWB's Ground Water Year Book, which reports "
+    "uranium, nitrate and salinity separately."
+)
+
+OUT_OF_SCOPE_MESSAGES = {"no_quality_data": NO_QUALITY_DATA}
+
 
 def handle_chat(db: Session, message: str, history: list[dict] | None = None) -> dict:
     """Run the pipeline. Always returns a usable response, never raises."""
@@ -38,7 +53,9 @@ def handle_chat(db: Session, message: str, history: list[dict] | None = None) ->
 
     if intent.intent == "out_of_scope":
         return {
-            "answer": OUT_OF_SCOPE,
+            "answer": OUT_OF_SCOPE_MESSAGES.get(
+                intent.out_of_scope_reason or "", OUT_OF_SCOPE
+            ),
             "citations": [],
             "chart_data": None,
             "map_data": None,
@@ -172,6 +189,18 @@ def _citations(raw_data: dict) -> list[dict]:
             }
         )
 
+    ranking = raw_data.get("ranking")
+    if ranking:
+        out.append(
+            {
+                "station": (
+                    f"{raw_data.get('districts_ranked')} districts ranked by "
+                    f"{'depletion rate' if raw_data.get('ranked_by') == 'depletion' else 'mean depth'}"
+                ),
+                "date": "CGWB, latest readings",
+            }
+        )
+
     comparison = raw_data.get("comparison")
     if comparison:
         for row in comparison.get("districts", []):
@@ -190,7 +219,11 @@ def _wants_chart(intent: QueryIntent) -> bool:
 
 def _wants_map(intent: QueryIntent, raw_data: dict) -> bool:
     """Several districts at once are worth putting on a map."""
-    return bool(raw_data.get("category_listing")) or len(intent.districts) >= 2
+    return (
+        bool(raw_data.get("category_listing"))
+        or bool(raw_data.get("ranking"))
+        or len(intent.districts) >= 2
+    )
 
 
 def _chart(db: Session, intent: QueryIntent, raw_data: dict) -> dict | None:
@@ -215,6 +248,8 @@ def _map(db: Session, intent: QueryIntent, raw_data: dict) -> dict | None:
         districts.append(intent.district)
     if raw_data.get("category_listing"):
         districts = [r["district"] for r in raw_data["category_listing"]]
+    elif raw_data.get("ranking"):
+        districts = [r["district"] for r in raw_data["ranking"]]
     if len(districts) < 2:
         return None
     points = gw.district_points(db, districts)

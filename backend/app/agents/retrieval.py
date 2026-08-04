@@ -45,6 +45,13 @@ def retrieval_agent(db: Session, intent: QueryIntent) -> dict:
             data["comparison"] = gw.compare(db, intent.districts)
             data["districts"] = intent.districts
 
+        elif intent.intent == "ranking":
+            ranked = gw.rank_districts(db, intent.rank_by, intent.rank_order)
+            data["ranking"] = ranked[:8]
+            data["ranked_by"] = intent.rank_by
+            data["ranked_order"] = intent.rank_order
+            data["districts_ranked"] = len(ranked)
+
         elif intent.intent == "years_to_critical":
             # Feeds the Calculation Agent (7.3).
             data["depletion_rate"] = gw.depletion_rate(

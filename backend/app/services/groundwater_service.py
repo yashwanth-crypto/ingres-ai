@@ -232,6 +232,44 @@ def blocks_for_district(db: Session, district: str) -> list[dict]:
     ]
 
 
+def rank_districts(db: Session, by: str = "depth", order: str = "highest") -> list[dict]:
+    """Rank every district by latest mean depth or by depletion rate.
+
+    Superlative questions ("which district has the deepest water table?") named
+    no district, so the pipeline previously picked an arbitrary one and answered
+    confidently about it. Answering them needs every district, not one.
+    """
+    rows: list[dict] = []
+    for district in CANONICAL_DISTRICTS:
+        try:
+            if by == "depletion":
+                rate = depletion_rate(db, district, 15)
+                rows.append(
+                    {
+                        "district": district,
+                        "value": rate["rate_m_per_year"],
+                        "unit": "m/year",
+                        "stations": len(rate["stations_used"]),
+                    }
+                )
+            else:
+                level = current_level(db, district)
+                rows.append(
+                    {
+                        "district": district,
+                        "value": level["district_mean_m"],
+                        "unit": "m below ground",
+                        "date": str(level["date"]),
+                        "stations": level["stations_reporting"],
+                    }
+                )
+        except (DistrictNotFound, NoDataForDistrict):
+            continue  # Malerkotla has no readings; it simply cannot be ranked.
+
+    rows.sort(key=lambda r: r["value"], reverse=(order == "highest"))
+    return rows
+
+
 def district_series(db: Session, district: str, years: int = 25) -> list[dict]:
     """Yearly mean depth for a district - the shape a trend chart needs."""
     district = resolve_district(district)
