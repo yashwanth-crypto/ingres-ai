@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.agents.query_understanding import QueryIntent
 from app.models import RiskCategory
 from app.services import groundwater_service as gw
+from app.services import rag_service
 
 
 def retrieval_agent(db: Session, intent: QueryIntent) -> dict:
@@ -44,6 +45,21 @@ def retrieval_agent(db: Session, intent: QueryIntent) -> dict:
         elif intent.intent == "comparison":
             data["comparison"] = gw.compare(db, intent.districts)
             data["districts"] = intent.districts
+
+        elif intent.intent == "document_question":
+            query = intent.question or ""
+            if intent.district:
+                query = f"{query} {intent.district}"
+            passages = rag_service.search(query.strip(), k=4)
+            data["passages"] = passages
+            if not passages:
+                data["unavailable"] = (
+                    "The CGWB report has no passage relevant to this question."
+                )
+            # The category is still worth showing when a district was named,
+            # as long as the answer does not confuse it with quality.
+            if intent.district:
+                data["risk_category"] = _safe_risk(db, intent.district)
 
         elif intent.intent == "ranking":
             ranked = gw.rank_districts(db, intent.rank_by, intent.rank_order)

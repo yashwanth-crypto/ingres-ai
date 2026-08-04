@@ -359,6 +359,48 @@ is replaced by a plain data dump saying so.
 Guard accuracy on its test cases: 7/7, with no false positives on rounded
 figures, `(CGWB, 2024)`-style citations, or prose parentheticals.
 
+## Hybrid retrieval — database *and* document
+
+Two sources, chosen by intent, never mixed:
+
+| Question | Source | Why |
+|---|---|---|
+| "Level in Bathinda?" | **Postgres** | Exact value, station, date |
+| "Which are over-exploited?" | **Postgres** | Exact list |
+| "Deepest water table?" | **Postgres** | Ranked across all districts |
+| "Is the water safe to drink?" | **CGWB report** | No quality data in the database |
+| "Why is groundwater falling?" | **CGWB report** | Explanation, not measurement |
+| "What does stage of extraction mean?" | **CGWB report** | Methodology |
+
+**Numbers never go through RAG.** Retrieving prose *about* a figure is strictly
+worse than querying the figure: it loses the station, the date, and the ability
+to check it. The report is indexed for what the database genuinely lacks.
+
+### The index
+
+254 chunks from pages 9–114 of *Ground Water Resources of Punjab 2024*,
+embedded with `nomic-embed-text` locally. Annexures I–V are deliberately
+**excluded** — those tables are already in Postgres as exact rows.
+
+At 254 chunks, search is a dot product over a 762 KB normalised matrix. No
+vector database, no pgvector, no extra service. The index is committed, so the
+pipeline runs without the 7 MB PDF.
+
+```bash
+python -m app.scripts.build_rag_index      # only needed to rebuild
+```
+
+Passages below 0.55 cosine similarity are discarded rather than answered from.
+Each carries its page number, so answers cite
+*"(CGWB, Ground Water Resources of Punjab 2024, p. 83)"*.
+
+> **Honest limitation.** Document answers are harder to verify than database
+> answers. The grounding checks confirm a cited page and figure appear in the
+> retrieved passages, but cannot catch a subtler misreading — in testing, a
+> Punjab-wide salinity statistic was once attributed to Bathinda specifically.
+> Database answers do not have this weakness, which is why numeric questions
+> stay on the structured path.
+
 ## Repository layout
 
 ```

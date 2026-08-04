@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     llm_provider: str = "anthropic"
     ollama_model: str = "qwen2.5:7b-instruct"
     ollama_base_url: str = "http://127.0.0.1:11434"
+    # Always local: embeddings are cheap to run and the index is built offline.
+    embedding_model: str = "nomic-embed-text"
 
     @property
     def sqlalchemy_url(self) -> str:

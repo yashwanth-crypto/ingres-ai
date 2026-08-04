@@ -189,6 +189,11 @@ def _citations(raw_data: dict) -> list[dict]:
             }
         )
 
+    for passage in raw_data.get("passages", []) or []:
+        out.append(
+            {"station": passage["citation"], "date": f"relevance {passage['score']}"}
+        )
+
     ranking = raw_data.get("ranking")
     if ranking:
         out.append(

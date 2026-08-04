@@ -36,6 +36,8 @@ Rules:
 - Water levels are depth below ground: a LARGER number means a DEEPER water table, which is worse. A rising rate means the water table is falling.
 - If the data includes a confidence_note or threshold_caveat, reflect its substance in the answer. Do not present a projection as a certainty.
 - If a district has a risk category but no water level readings, say exactly that.
+- When the data contains "passages", the answer comes from CGWB's report. Use only what those passages say, and cite them by copying their "citation" field verbatim, e.g. "(CGWB, Ground Water Resources of Punjab 2024, p. 83)". If the passages do not actually answer the question, say so rather than guessing.
+- Never present an extraction category (safe / over-exploited) as an answer about water quality or drinking safety. They measure different things.
 - Set needs_chart when the data covers several years or a trend; set needs_map when it covers several districts.
 - Be concise. Two or three sentences is usually enough. Do not add caveats beyond those the data supports."""
 
