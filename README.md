@@ -5,9 +5,10 @@ plain-English question about a district, get a grounded, cited answer with a
 chart or map. Built as a 5-agent pipeline — query understanding → retrieval →
 calculation → verification → response.
 
-**Status: Phase 1 (data layer) — complete.** In Postgres: 1,607 stations,
-36,879 readings spanning 1996–2024, 23 district risk categories and 153 CGWB
-assessment blocks. Next up is Phase 2, the tool endpoints.
+**Status: Phases 1–3 complete.** Data loaded (1,607 stations, 36,879 readings
+1996–2024, 23 risk categories, 153 assessment blocks), six tool endpoints
+live, and the five-agent pipeline answering all four demo questions. Next is
+Phase 4, the React frontend.
 
 ---
 
@@ -311,6 +312,52 @@ readings show a falling water table** — none rising.
 > 0.04 m/yr. Its blocks split 2 safe / 1 semi-critical / 2 over-exploited, and
 > the tie broke toward the worse category. The block counts are stored precisely
 > so an answer can show this rather than hide it.
+
+## Phase 3 — the agent pipeline
+
+`POST /chat` runs query understanding → retrieval → calculation →
+verification → response (spec §7).
+
+### Two LLM backends
+
+Set `LLM_PROVIDER` in `.env`:
+
+| Value | Model | Cost | Notes |
+|---|---|---|---|
+| `ollama` | `qwen2.5:7b-instruct` | free | Local, works offline — covers spec §13's venue-wifi risk |
+| `anthropic` | `claude-opus-5` | ~$0.02/question | Stronger verification; use for the demo |
+
+The five agents are identical either way; only the backend call differs.
+Ollama's JSON-schema mode and the Claude API's structured outputs both return
+a validated Pydantic object, so no agent ever parses free text.
+
+First Ollama call takes ~45 s while the model loads into VRAM, then ~1 s.
+**Warm it before a demo** with any throwaway question.
+
+### Grounding checks — why an LLM verifier is not enough
+
+Spec §7.4 has a model fact-check another model. That works until it doesn't:
+the 7B model approved a draft citing **Kot Shamir — a Bathinda station — as
+the source for a Ludhiana figure**, and credited the 30 m projection depth to
+CGWB when the data explicitly says it is not a CGWB threshold. The numbers
+were right; the attributions were invented.
+
+So [grounding.py](backend/app/agents/grounding.py) runs plain-Python checks
+over the retrieved data first. It cannot hallucinate, and it catches:
+
+- a citation naming something absent from the data
+- a figure matching no value in the data (with rounding tolerance)
+- a district the retrieved data does not cover
+- a non-CGWB threshold attributed to CGWB
+
+These are the **blocking** gate. The LLM reviewer is **advisory** — it catches
+nuance the rules cannot (a dropped caveat, a projection stated as fact) but
+also objects to figures that are genuinely present, so it triggers one rewrite
+rather than a block. If grounding still fails after that rewrite, the answer
+is replaced by a plain data dump saying so.
+
+Guard accuracy on its test cases: 7/7, with no false positives on rounded
+figures, `(CGWB, 2024)`-style citations, or prose parentheticals.
 
 ## Repository layout
 
