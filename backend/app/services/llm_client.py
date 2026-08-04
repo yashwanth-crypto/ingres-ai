@@ -140,11 +140,15 @@ def _ollama_structured(
     content = reply.json().get("message", {}).get("content", "")
     try:
         return schema.model_validate_json(content)
-    except ValidationError as exc:
+    except ValidationError:
+        # A small model can run out of output tokens partway through the JSON,
+        # especially on long retrieved passages. One retry with more room.
+        if max_tokens < 4096:
+            return _ollama_structured(system, user, schema, 4096)
         raise LLMUnavailable(
-            f"{settings.ollama_model} returned output that did not match the "
-            f"expected schema: {exc}"
-        ) from exc
+            f"{settings.ollama_model} could not produce a valid response for "
+            f"this question, even with a longer output budget."
+        ) from None
 
 
 def generate_text(

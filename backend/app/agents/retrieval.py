@@ -38,6 +38,9 @@ def retrieval_agent(db: Session, intent: QueryIntent) -> dict:
             if intent.category:
                 data["category_listing"] = _districts_in_category(db, intent.category)
                 data["category"] = intent.category
+                # Without the denominator the answer says "all districts listed
+                # are over-exploited", which reads as if all 23 are.
+                data["category_totals"] = _category_totals(db)
             else:
                 data["risk_category"] = gw.risk_category(db, intent.district)
                 data["blocks"] = gw.blocks_for_district(db, intent.district)
@@ -50,19 +53,28 @@ def retrieval_agent(db: Session, intent: QueryIntent) -> dict:
             query = intent.question or ""
             if intent.district:
                 query = f"{query} {intent.district}"
-            passages = rag_service.search(query.strip(), k=4)
+            # Three passages, not four: a 7B model given four long extracts
+            # rambled past its output budget and had to be retried, which
+            # doubled latency. Three is enough to answer and stay fast.
+            passages = rag_service.search(query.strip(), k=3)
             data["passages"] = passages
             if not passages:
                 data["unavailable"] = (
                     "The CGWB report has no passage relevant to this question."
                 )
-            # The category is still worth showing when a district was named,
-            # as long as the answer does not confuse it with quality.
-            if intent.district:
-                data["risk_category"] = _safe_risk(db, intent.district)
+            # The extraction category is deliberately NOT retrieved here. Asked
+            # "is the water safe to drink?", the model led with "Bathinda is
+            # over-exploited" even though the prompt forbids it - so the
+            # category is simply withheld from questions it cannot answer.
+            # Withholding beats instructing.
 
         elif intent.intent == "ranking":
             ranked = gw.rank_districts(db, intent.rank_by, intent.rank_order)
+            # The winner is stated outright. Handed a sorted list, the model
+            # picked the wrong row - "Hoshiarpur, 8.94 m" from a list whose
+            # top entry was Barnala at 43.22 m. Both values were real, so the
+            # grounding checks could not catch it.
+            data["answer_is"] = ranked[0] if ranked else None
             data["ranking"] = ranked[:8]
             data["ranked_by"] = intent.rank_by
             data["ranked_order"] = intent.rank_order
@@ -92,6 +104,15 @@ def _safe_risk(db: Session, district: str | None) -> dict | None:
         return gw.risk_category(db, district)
     except (gw.DistrictNotFound, gw.NoDataForDistrict):
         return None
+
+
+def _category_totals(db: Session) -> dict:
+    """How many districts sit in each category, and how many exist overall."""
+    rows = db.query(RiskCategory).all()
+    totals: dict[str, int] = {}
+    for row in rows:
+        totals[row.category] = totals.get(row.category, 0) + 1
+    return {"districts_assessed": len(rows), "by_category": totals}
 
 
 def _districts_in_category(db: Session, category: str) -> list[dict]:

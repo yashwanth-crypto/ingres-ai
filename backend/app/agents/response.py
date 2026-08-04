@@ -36,8 +36,10 @@ Rules:
 - Water levels are depth below ground: a LARGER number means a DEEPER water table, which is worse. A rising rate means the water table is falling.
 - If the data includes a confidence_note or threshold_caveat, reflect its substance in the answer. Do not present a projection as a certainty.
 - If a district has a risk category but no water level readings, say exactly that.
-- When the data contains "passages", the answer comes from CGWB's report. Use only what those passages say, and cite them by copying their "citation" field verbatim, e.g. "(CGWB, Ground Water Resources of Punjab 2024, p. 83)". If the passages do not actually answer the question, say so rather than guessing.
+- If the data contains "answer_is", that entry IS the answer. Report that district and its value. Do not pick a different row from "ranking" - that list is only supporting context.
+- ONLY when the data contains "passages": the answer comes from CGWB's report, so use only what those passages say and cite them by copying a "citation" field verbatim. If there is no "passages" key, never mention the report, a page number, or "Ground Water Resources of Punjab" - those answers come from the monitoring database and citing a document would be a fabricated source.
 - Never present an extraction category (safe / over-exploited) as an answer about water quality or drinking safety. They measure different things.
+- When listing districts in a category, lead with the count against the total, e.g. "20 of Punjab's 23 assessed districts are over-exploited", then name them. Never say "all districts listed" - it reads as if every district in Punjab is in that category.
 - Set needs_chart when the data covers several years or a trend; set needs_map when it covers several districts.
 - Be concise. Two or three sentences is usually enough. Do not add caveats beyond those the data supports."""
 
@@ -63,4 +65,7 @@ def response_agent(
         f"Question: {question}\n\nData:\n{payload}",
         DraftAnswer,
         effort=EFFORT_REASONING,
+        # Document answers quote longer passages and were running out of output
+        # tokens mid-JSON, forcing a retry that doubled latency.
+        max_tokens=4096 if raw_data.get("passages") else 2048,
     )

@@ -35,6 +35,7 @@ export default function ChatWindow() {
           chart_data: reply.chart_data,
           map_data: reply.map_data,
           verified: reply.verified,
+          source: reply.source,
         },
       ]);
     } catch (e) {

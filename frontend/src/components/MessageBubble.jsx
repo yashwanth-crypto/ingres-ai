@@ -20,14 +20,32 @@ export default function MessageBubble({ message }) {
         <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
 
         {message.citations?.length > 0 && (
-          <ul className="mt-3 border-t border-stone-100 pt-2">
-            {message.citations.map((c, i) => (
-              <li key={i} className="text-xs text-slate-500">
-                <span className="text-slate-400">[{i + 1}]</span> {c.station}
-                {c.date ? `, ${c.date}` : ""}
-              </li>
-            ))}
-          </ul>
+          <div className="mt-3 border-t border-stone-100 pt-2">
+            {message.source && (
+              <span
+                className={`mb-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                  message.source === "report"
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-depth-100 text-depth-700"
+                }`}
+                title={
+                  message.source === "report"
+                    ? "Answered from CGWB's published report"
+                    : "Answered from the monitoring database"
+                }
+              >
+                {message.source === "report" ? "CGWB report" : "Monitoring data"}
+              </span>
+            )}
+            <ul>
+              {message.citations.map((c, i) => (
+                <li key={i} className="text-xs text-slate-500">
+                  <span className="text-slate-400">[{i + 1}]</span> {c.station}
+                  {c.date ? `, ${c.date}` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {/* An unverified answer is shown, but never presented as trustworthy. */}

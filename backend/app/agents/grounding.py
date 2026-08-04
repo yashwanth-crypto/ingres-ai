@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 
-from app.scripts.districts import CANONICAL_DISTRICTS
+from app.scripts.districts import CANONICAL_DISTRICTS, variants_of
 
 # Sources an answer may legitimately name without them appearing as data values.
 ALLOWED_SOURCES = {"cgwb", "punjab", "india", "district", "average", "mean"}
@@ -121,12 +121,16 @@ def grounding_issues(draft: str, raw_data: dict) -> list[str]:
     # Catches the mirror image of an invented citation: a real station quoted
     # under the wrong district's name.
     for district in CANONICAL_DISTRICTS:
-        if re.search(rf"\b{re.escape(district)}\b", draft, re.IGNORECASE):
-            if not any(district.lower() in s for s in known_strings):
-                issues.append(
-                    f"The draft discusses {district}, but the retrieved data "
-                    f"does not cover that district."
-                )
+        if not re.search(rf"\b{re.escape(district)}\b", draft, re.IGNORECASE):
+            continue
+        # Match any spelling the data might use, not just the canonical one -
+        # the CGWB report writes "Bhatinda" for Bathinda.
+        spellings = variants_of(district) | {district.lower()}
+        if not any(s in text for text in known_strings for s in spellings):
+            issues.append(
+                f"The draft discusses {district}, but the retrieved data "
+                f"does not cover that district."
+            )
 
     # --- 4. A threshold the data flags as non-official must not be credited
     #        to CGWB ---

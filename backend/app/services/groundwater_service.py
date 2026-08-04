@@ -232,7 +232,7 @@ def blocks_for_district(db: Session, district: str) -> list[dict]:
     ]
 
 
-def rank_districts(db: Session, by: str = "depth", order: str = "highest") -> list[dict]:
+def rank_districts(db: Session, by: str = "depth", order: str = "worst") -> list[dict]:
     """Rank every district by latest mean depth or by depletion rate.
 
     Superlative questions ("which district has the deepest water table?") named
@@ -266,7 +266,8 @@ def rank_districts(db: Session, by: str = "depth", order: str = "highest") -> li
         except (DistrictNotFound, NoDataForDistrict):
             continue  # Malerkotla has no readings; it simply cannot be ranked.
 
-    rows.sort(key=lambda r: r["value"], reverse=(order == "highest"))
+    # For both metrics a larger number is worse: deeper water table, faster fall.
+    rows.sort(key=lambda r: r["value"], reverse=(order != "best"))
     return rows
 
 

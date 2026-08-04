@@ -52,8 +52,12 @@ class QueryIntent(BaseModel):
     rank_by: Literal["depth", "depletion"] | None = Field(
         default=None, description="For ranking intent: depth or depletion rate"
     )
-    rank_order: Literal["highest", "lowest"] | None = Field(
-        default=None, description="For ranking intent: worst/deepest vs best/shallowest"
+    # "worst"/"best" rather than "highest"/"lowest": a DEEP water table is a
+    # LOW water level, so the model read "deepest" as "lowest" and returned the
+    # shallowest district. Naming the axis by severity removes the ambiguity.
+    rank_order: Literal["worst", "best"] | None = Field(
+        default=None,
+        description="For ranking: 'worst' = deepest / fastest falling, 'best' = the opposite",
     )
     out_of_scope_reason: Literal[
         "not_punjab", "not_groundwater", "no_quality_data"
@@ -79,7 +83,7 @@ Rules:
 - "depletion_trend" is for rate-of-change questions.
 - "risk_category" is for questions about CGWB's safe / semi-critical / critical / over-exploited classification. If the question asks which districts fall into a category ("which districts are over-exploited?"), use intent "risk_category", leave "district" null, and set "category" to the category named.
 - "current_status" is the default for a plain question about one district's present situation.
-- "ranking" is for superlatives that name no district: "which district has the deepest water table", "where is water falling fastest", "which is worst". Set "rank_by" to "depth" or "depletion", and "rank_order" to "highest" (deepest / fastest-falling / worst) or "lowest" (shallowest / slowest / best).
+- "ranking" is for superlatives that name no district: "which district has the deepest water table", "where is water falling fastest", "which is worst". Set "rank_by" to "depth" or "depletion". Set "rank_order" to "worst" for the deepest water table, the fastest-falling, the most depleted, or the worst affected; set it to "best" for the shallowest, the slowest-falling, or the least affected. Note that a DEEPER water table is WORSE - depth is measured downward from the ground, so a larger number means less water.
 - Set "years" only if the question names a time window explicitly.
 
 Two different sources:
@@ -131,7 +135,7 @@ def query_understanding_agent(
 
     if intent.intent == "ranking":
         intent.rank_by = intent.rank_by or "depth"
-        intent.rank_order = intent.rank_order or "highest"
+        intent.rank_order = intent.rank_order or "worst"
         return intent
 
     needs_district = intent.intent in (

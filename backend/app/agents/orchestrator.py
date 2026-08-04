@@ -119,6 +119,8 @@ def handle_chat(db: Session, message: str, history: list[dict] | None = None) ->
         "intent": intent.intent,
         "verified": True,
         "review_notes": soft,
+        # Which of the two sources answered, so the interface can show it.
+        "source": "report" if raw_data.get("passages") else "database",
     }
 
 
@@ -308,9 +310,9 @@ def _data_dump(raw_data: dict, issues: list[str]) -> str:
 def _error(detail: str) -> dict:
     return {
         "answer": (
-            "The assistant is not fully configured, so I cannot answer in "
-            f"natural language right now. ({detail}) The underlying data is "
-            "still available through the /tools endpoints."
+            "I could not produce an answer for that question right now. "
+            f"({detail})\n\nThe data itself is unaffected - try rephrasing, or "
+            "ask a more specific question."
         ),
         "citations": [],
         "chart_data": None,

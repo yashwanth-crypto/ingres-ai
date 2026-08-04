@@ -4,6 +4,9 @@ const SUGGESTIONS = [
   "What's the groundwater status in Bathinda?",
   "Which districts in Punjab are over-exploited?",
   "How many years until Ludhiana hits critical depth at the current rate?",
+  // Answered from the CGWB report rather than the database — the one question
+  // that shows hybrid retrieval, and nobody thinks to ask it.
+  "Is the water in Bathinda safe to drink?",
   "What's the groundwater status in Mumbai?",
 ];
 

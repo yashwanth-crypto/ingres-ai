@@ -118,6 +118,16 @@ def canonical_district(value: str | None) -> str | None:
     return _VARIANTS.get(key)
 
 
+def variants_of(district: str) -> set[str]:
+    """Every spelling that maps to this district, lowercased.
+
+    CGWB's own report spells Bathinda "Bhatinda" in places, so a check that
+    looks for the canonical name alone reports a district as missing from text
+    that plainly discusses it.
+    """
+    return {v for v, canonical in _VARIANTS.items() if canonical == district}
+
+
 def is_punjab(value: str | None) -> bool:
     """True if a state column value refers to Punjab."""
     if value is None:
