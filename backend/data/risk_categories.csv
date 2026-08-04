@@ -1,0 +1,24 @@
+district,category,assessment_year,blocks_assessed,blocks_safe,blocks_semi_critical,blocks_critical,blocks_over_exploited
+Amritsar,over-exploited,2024,10,0,0,0,10
+Barnala,over-exploited,2024,3,0,0,0,3
+Bathinda,over-exploited,2024,9,2,1,1,5
+Faridkot,over-exploited,2024,3,0,0,0,3
+Fatehgarh Sahib,over-exploited,2024,5,0,0,0,5
+Fazilka,safe,2024,5,3,1,0,1
+Ferozepur,over-exploited,2024,6,2,0,1,3
+Gurdaspur,over-exploited,2024,11,1,1,1,8
+Hoshiarpur,over-exploited,2024,10,1,3,0,6
+Jalandhar,over-exploited,2024,12,0,0,0,12
+Kapurthala,over-exploited,2024,5,0,0,0,5
+Ludhiana,over-exploited,2024,14,0,0,0,14
+Malerkotla,over-exploited,2024,2,0,0,0,2
+Mansa,over-exploited,2024,5,2,1,0,2
+Moga,over-exploited,2024,5,0,0,0,5
+Muktsar,safe,2024,4,4,0,0,0
+Pathankot,safe,2024,6,4,2,0,0
+Patiala,over-exploited,2024,9,0,0,0,9
+Rupnagar,over-exploited,2024,5,2,1,0,2
+Sahibzada Ajit Singh Nagar,over-exploited,2024,3,0,1,1,1
+Sangrur,over-exploited,2024,8,0,0,0,8
+Shahid Bhagat Singh Nagar,over-exploited,2024,5,1,1,0,3
+Tarn Taran,over-exploited,2024,8,0,0,0,8

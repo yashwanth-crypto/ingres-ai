@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.local
+
+node_modules/
+dist/
+.vite/
+
+# Raw source data is large and re-downloadable; keep it out of git.
+backend/data/raw/*
+!backend/data/raw/.gitkeep
+
+.DS_Store
+
+# runtime logs
+*.log

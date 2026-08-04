@@ -1,0 +1,154 @@
+district,block,stage_pct,category
+Amritsar,Ajnala,155.84,over-exploited
+Amritsar,Amritsar Urban,324.34,over-exploited
+Amritsar,Attari,186.30,over-exploited
+Amritsar,Chogawan,144.21,over-exploited
+Amritsar,Harsha Chhina,183.82,over-exploited
+Amritsar,Jandiala Guru,214.46,over-exploited
+Amritsar,Majitha,166.42,over-exploited
+Amritsar,Rayya,170.43,over-exploited
+Amritsar,Tarsikka,214.13,over-exploited
+Amritsar,Verka,241.14,over-exploited
+Barnala,Barnala,305.22,over-exploited
+Barnala,Mahal Kalan,123.70,over-exploited
+Barnala,Sehna,209.77,over-exploited
+Bathinda,Bathinda,93.54,critical
+Bathinda,Bhagta Bhai Ka,327.52,over-exploited
+Bathinda,Goniana Mandi,235.96,over-exploited
+Bathinda,Maur,182.29,over-exploited
+Bathinda,Nathana,117.23,over-exploited
+Bathinda,Phul,135.98,over-exploited
+Bathinda,Rampura,78.95,semi-critical
+Bathinda,Sangat,66.07,safe
+Bathinda,Talwandi Sabo,61.16,safe
+Faridkot,Faridkot,110.93,over-exploited
+Faridkot,Jaiton,172.45,over-exploited
+Faridkot,Kot Kapura,111.58,over-exploited
+Fatehgarh Sahib,Amloh,263.04,over-exploited
+Fatehgarh Sahib,Bassi Pathanan,263.47,over-exploited
+Fatehgarh Sahib,Khamanon,176.21,over-exploited
+Fatehgarh Sahib,Khera,187.77,over-exploited
+Fatehgarh Sahib,Sirhind,184.26,over-exploited
+Fazilka,Abohar,16.62,safe
+Fazilka,Arniwala Sheikh Subanpur,76.05,semi-critical
+Fazilka,Fazilka,20.86,safe
+Fazilka,Jalalabad,130.65,over-exploited
+Fazilka,Khuian Sarwar,56.16,safe
+Ferozepur,Firozpur,97.33,critical
+Ferozepur,Ghall Khurd,139.16,over-exploited
+Ferozepur,Guruhar Sahai,67.74,safe
+Ferozepur,Makhu,58.34,safe
+Ferozepur,Mamdot,122.84,over-exploited
+Ferozepur,Zira,267.44,over-exploited
+Gurdaspur,Batala,175.16,over-exploited
+Gurdaspur,Dera Baba Nanak,172.41,over-exploited
+Gurdaspur,Dhariwal,172.87,over-exploited
+Gurdaspur,Dina Nagar,67.86,safe
+Gurdaspur,Dorangala,76.95,semi-critical
+Gurdaspur,Fatehgarh Churian,175.49,over-exploited
+Gurdaspur,Gurdaspur,108.87,over-exploited
+Gurdaspur,Kahnuwan,125.26,over-exploited
+Gurdaspur,Kalanaur,172.56,over-exploited
+Gurdaspur,Qadian,103.73,over-exploited
+Gurdaspur,Sri Hargobindpur,97.17,critical
+Hoshiarpur,Bhunga,72.38,semi-critical
+Hoshiarpur,Dasuya,142.30,over-exploited
+Hoshiarpur,Garh Shankar,164.50,over-exploited
+Hoshiarpur,Hajipur,80.02,semi-critical
+Hoshiarpur,Hoshiarpur-1,158.34,over-exploited
+Hoshiarpur,Hoshiarpur-2,87.54,semi-critical
+Hoshiarpur,Mahilpur,106.34,over-exploited
+Hoshiarpur,Mukerian,101.67,over-exploited
+Hoshiarpur,Talwara,31.93,safe
+Hoshiarpur,Tanda,177.74,over-exploited
+Jalandhar,Adampur,230.80,over-exploited
+Jalandhar,Bhogpur,206.93,over-exploited
+Jalandhar,Jalandhar City,433.88,over-exploited
+Jalandhar,Jalandhar East,444.27,over-exploited
+Jalandhar,Jalandhar West,243.64,over-exploited
+Jalandhar,Lohian,228.09,over-exploited
+Jalandhar,Mehatpur,248.12,over-exploited
+Jalandhar,Nakodar,315.65,over-exploited
+Jalandhar,Nur Mahal,188.49,over-exploited
+Jalandhar,Phillaur,252.53,over-exploited
+Jalandhar,Rurka Kalan,249.29,over-exploited
+Jalandhar,Shahkot,318.22,over-exploited
+Kapurthala,Dhilwan,176.83,over-exploited
+Kapurthala,Kapurthala,289.89,over-exploited
+Kapurthala,Nadala,135.00,over-exploited
+Kapurthala,Phagwara,276.40,over-exploited
+Kapurthala,Sultanpur Lodhi,246.49,over-exploited
+Ludhiana,Dehlon,227.20,over-exploited
+Ludhiana,Doraha,156.64,over-exploited
+Ludhiana,Jagraon,159.71,over-exploited
+Ludhiana,Khanna,303.14,over-exploited
+Ludhiana,Ludhiana City,308.41,over-exploited
+Ludhiana,Ludhiana-1,397.52,over-exploited
+Ludhiana,Ludhiana-2,211.48,over-exploited
+Ludhiana,Machhiwara,163.76,over-exploited
+Ludhiana,Maloud,198.40,over-exploited
+Ludhiana,Pakhowal,295.51,over-exploited
+Ludhiana,Raikot,294.62,over-exploited
+Ludhiana,Samrala,235.34,over-exploited
+Ludhiana,Sidhwan Bet,242.41,over-exploited
+Ludhiana,Sudhar,237.40,over-exploited
+Malerkotla,Malerkotla-1,304.94,over-exploited
+Malerkotla,Malerkotla-2,299.96,over-exploited
+Mansa,Bhikhi,183.67,over-exploited
+Mansa,Budhlada,79.90,semi-critical
+Mansa,Jhunir,48.02,safe
+Mansa,Mansa,158.15,over-exploited
+Mansa,Sardulgarh,62.26,safe
+Moga,Bagha Purana,204.51,over-exploited
+Moga,Kot Ise Khan At Dharamkot,140.07,over-exploited
+Moga,Moga-1,331.26,over-exploited
+Moga,Moga-2,348.61,over-exploited
+Moga,Nihal Singh Wala,352.44,over-exploited
+Muktsar,Kot Bhai At Gidderbaha,31.82,safe
+Muktsar,Lambi,17.20,safe
+Muktsar,Malout,31.12,safe
+Muktsar,Muktsar,19.69,safe
+Pathankot,Bamial,86.67,semi-critical
+Pathankot,Dhar Kalan,34.91,safe
+Pathankot,Gharota,64.90,safe
+Pathankot,Narot Jaimal Singh,78.33,semi-critical
+Pathankot,Pathankot,59.20,safe
+Pathankot,Sujanpur,36.11,safe
+Patiala,Bhunarheri,281.88,over-exploited
+Patiala,Ghanaur,119.21,over-exploited
+Patiala,Nabha,205.45,over-exploited
+Patiala,Patiala,183.68,over-exploited
+Patiala,Patran,284.07,over-exploited
+Patiala,Rajpura,194.13,over-exploited
+Patiala,Samana,188.29,over-exploited
+Patiala,Sanaur,239.45,over-exploited
+Patiala,Shambu Kalan,255.36,over-exploited
+Rupnagar,Anandpur Sahib,78.43,semi-critical
+Rupnagar,Chamkaur Sahib,117.88,over-exploited
+Rupnagar,Morinda,161.30,over-exploited
+Rupnagar,Nurpur Bedi,66.89,safe
+Rupnagar,Rupnagar,68.01,safe
+Sahibzada Ajit Singh Nagar,Derabassi,182.86,over-exploited
+Sahibzada Ajit Singh Nagar,Kharar,93.09,critical
+Sahibzada Ajit Singh Nagar,Majri,80.78,semi-critical
+Sangrur,Andana,260.89,over-exploited
+Sangrur,Bhawanigarh,348.02,over-exploited
+Sangrur,Dhuri,350.35,over-exploited
+Sangrur,Dirba,342.14,over-exploited
+Sangrur,Lehra Gaga,277.50,over-exploited
+Sangrur,Sangrur,276.55,over-exploited
+Sangrur,Sher Pur,315.59,over-exploited
+Sangrur,Sunam,356.00,over-exploited
+Shahid Bhagat Singh Nagar,Aur,107.54,over-exploited
+Shahid Bhagat Singh Nagar,Balachaur,88.18,semi-critical
+Shahid Bhagat Singh Nagar,Banga,240.79,over-exploited
+Shahid Bhagat Singh Nagar,Nawan Shahr,142.19,over-exploited
+Shahid Bhagat Singh Nagar,Saroya,68.91,safe
+Tarn Taran,Bhikhiwind,224.45,over-exploited
+Tarn Taran,Chohla Sahib,199.87,over-exploited
+Tarn Taran,Gandiwind Tatla,120.20,over-exploited
+Tarn Taran,Khadur Sahib,171.46,over-exploited
+Tarn Taran,Naushera Pannuan,278.37,over-exploited
+Tarn Taran,Patti,236.35,over-exploited
+Tarn Taran,Tarn Taran,247.13,over-exploited
+Tarn Taran,Valtoha,132.95,over-exploited

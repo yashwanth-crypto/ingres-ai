@@ -1,0 +1,22 @@
+# Pinned to the versions actually installed and imported on Python 3.14
+# during Phase 1 setup, not to guesses. Older pins (fastapi 0.115, sqlalchemy
+# 2.0.36) predate cp314 wheels and fail to build here.
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+sqlalchemy==2.0.51
+psycopg[binary]==3.3.4
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-dotenv==1.0.1
+numpy==2.4.2
+anthropic==0.120.2
+httpx==0.28.1
+
+# Deliberately absent:
+#   pandas - ingest_data.py is stdlib-csv only. This machine's Application
+#            Control policy blocks pandas' unsigned compiled extensions
+#            (numpy's and psycopg's are fine), and the cleaning logic never
+#            needed a dataframe.
+#   scipy  - the Calculation Agent will use numpy.polyfit (offered by spec
+#            section 7.3) rather than scipy.stats.linregress, to avoid the
+#            same risk on a dependency we barely need.
