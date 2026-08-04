@@ -90,9 +90,15 @@ def handle_chat(db: Session, message: str, history: list[dict] | None = None) ->
 
     return {
         "answer": draft.answer,
-        "citations": [c.model_dump() for c in draft.citations],
-        "chart_data": _chart(db, intent, raw_data) if draft.needs_chart else None,
-        "map_data": _map(db, intent, raw_data) if draft.needs_map else None,
+        # Built from the retrieved data, not from the model. Small models
+        # reliably write citations inline in the prose but leave the structured
+        # field empty, and the data already knows exactly what backed the answer.
+        "citations": _citations(raw_data),
+        # Decided from the intent, not from a model-set boolean. The model was
+        # observed leaving both flags false on questions that plainly wanted a
+        # visual, and this is a rule, not a judgement call.
+        "chart_data": _chart(db, intent, raw_data) if _wants_chart(intent) else None,
+        "map_data": _map(db, intent, raw_data) if _wants_map(intent, raw_data) else None,
         "intent": intent.intent,
         "verified": True,
         "review_notes": soft,
@@ -114,6 +120,77 @@ def _check(draft: str, raw_data: dict) -> tuple[list[str], list[str]]:
     verdict = verification_agent(draft, raw_data)
     soft = [] if verdict.approved else list(verdict.issues)
     return hard, soft
+
+
+def _citations(raw_data: dict) -> list[dict]:
+    """Every source that actually fed the answer, straight from the data."""
+    out: list[dict] = []
+
+    level = raw_data.get("current_level")
+    if level:
+        out.append(
+            {
+                "station": f"{level['station']} ({level['district']})",
+                "date": str(level["date"]),
+            }
+        )
+
+    rate = raw_data.get("depletion_rate")
+    if rate:
+        out.append(
+            {
+                "station": (
+                    f"Median trend across {len(rate['stations_used'])} stations, "
+                    f"{rate['district']}"
+                ),
+                "date": f"last {rate['years_analyzed']} years",
+            }
+        )
+
+    risk = raw_data.get("risk_category")
+    if risk:
+        out.append(
+            {
+                "station": (
+                    f"CGWB assessment, {risk['district']} "
+                    f"({risk['blocks_over_exploited']}/{risk['blocks_assessed']} "
+                    f"blocks over-exploited)"
+                ),
+                "date": str(risk["assessment_year"]),
+            }
+        )
+
+    listing = raw_data.get("category_listing")
+    if listing:
+        out.append(
+            {
+                "station": (
+                    f"CGWB assessment, {len(listing)} districts categorised "
+                    f"{raw_data.get('category', '')}".strip()
+                ),
+                "date": str(listing[0].get("assessment_year", "")),
+            }
+        )
+
+    comparison = raw_data.get("comparison")
+    if comparison:
+        for row in comparison.get("districts", []):
+            if row.get("date"):
+                out.append(
+                    {"station": row["district"], "date": str(row["date"])}
+                )
+
+    return out
+
+
+def _wants_chart(intent: QueryIntent) -> bool:
+    """A single district's history over time is worth plotting."""
+    return intent.intent in ("current_status", "depletion_trend", "years_to_critical")
+
+
+def _wants_map(intent: QueryIntent, raw_data: dict) -> bool:
+    """Several districts at once are worth putting on a map."""
+    return bool(raw_data.get("category_listing")) or len(intent.districts) >= 2
 
 
 def _chart(db: Session, intent: QueryIntent, raw_data: dict) -> dict | None:
@@ -141,7 +218,16 @@ def _map(db: Session, intent: QueryIntent, raw_data: dict) -> dict | None:
     if len(districts) < 2:
         return None
     points = gw.district_points(db, districts)
-    return {"points": points} if points else None
+    if not points:
+        return None
+    # A district can be categorised but unmappable - Malerkotla has a CGWB
+    # category and no monitoring stations. Report it instead of quietly
+    # showing 19 pins for 20 districts.
+    plotted = {p["district"] for p in points}
+    return {
+        "points": points,
+        "not_plotted": [d for d in districts if d not in plotted],
+    }
 
 
 def _data_dump(raw_data: dict, issues: list[str]) -> str:

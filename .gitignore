@@ -17,3 +17,6 @@ backend/data/raw/*
 
 # runtime logs
 *.log
+
+backend.out
+backend.err

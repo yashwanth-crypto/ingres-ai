@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "leaflet/dist/leaflet.css";
+
+body {
+  @apply bg-stone-50 text-slate-800 antialiased;
+}
+
+/* Leaflet renders under sticky headers without this. */
+.leaflet-container {
+  z-index: 0;
+}
