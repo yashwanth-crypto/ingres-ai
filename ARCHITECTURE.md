@@ -75,7 +75,7 @@ report, which caught **4 wrong categories** in the first attempt.
 | `models.py` | 77 | ORM: `Station`, `Reading`, `RiskCategory`, `AssessmentBlock`. |
 | `schemas.py` | 68 | Pydantic response shapes for the API. |
 | `scripts/schema.sql` | 64 | Tables. Adds two unique indexes beyond spec §4 — without them a second ingestion silently doubles every row. |
-| `scripts/districts.py` | 135 | Punjab's 23 canonical district names plus every spelling CGWB actually uses. `Ropar`→Rupnagar, `Firozpur`→Ferozepur, `Mukatsar`→Muktsar, `Mohali`/`SAS Nagar`→Sahibzada Ajit Singh Nagar. `variants_of()` exists because the report writes *Bhatinda*. |
+| `scripts/districts.py` | 160 | Punjab's 23 canonical district names plus every spelling CGWB actually uses. `Ropar`→Rupnagar, `Firozpur`→Ferozepur, `Mukatsar`→Muktsar, `Mohali`/`SAS Nagar`→Sahibzada Ajit Singh Nagar. `variants_of()` exists because the report writes *Bhatinda*. |
 | `scripts/create_db.py` | 61 | Creates the database. Postgres has no `CREATE DATABASE IF NOT EXISTS`, and it cannot be created from a connection to itself. |
 | `scripts/ingest_data.py` | 776 | The loader. Resolves columns against known CGWB header spellings and **aborts printing the real headers** rather than guessing. Handles long and wide layouts, drops non-Punjab rows, sentinels (`-9999`), unparseable dates, and out-of-range levels — counting every drop by reason. Idempotent. |
 | `scripts/build_rag_index.py` | 308 | Chunks the report's narrative chapters — printed pages 1–78 — and embeds them locally. Every chunk records its chapter, section, the districts it names, and whether it is district-scoped or statewide. Annexures are excluded on purpose: those tables are already in Postgres as exact rows. |
@@ -92,7 +92,7 @@ report, which caught **4 wrong categories** in the first attempt.
 
 | File | Lines | Job |
 |---|---|---|
-| `query_understanding.py` | 154 | Question → structured intent, via constrained JSON. Also canonicalises the district itself, so a near-miss spelling never reaches SQL. |
+| `query_understanding.py` | 206 | Question → structured intent, via constrained JSON. Canonicalises the district itself, so a near-miss spelling never reaches SQL, and resolves a follow-up that points back at the conversation rather than naming its subject. |
 | `retrieval.py` | 142 | **Deterministic.** Maps intent to service calls, and passes the district to the reranker rather than only gluing it onto the query. No model involved. |
 | `calculation.py` | 108 | **Deterministic.** Projects the water table forward at its measured rate, and states the year it lands on rather than leaving that as arithmetic. |
 | `grounding.py` | 314 | **Deterministic.** The blocking verification gate — seven checks. |
@@ -134,6 +134,7 @@ Pure functions only: no model, no database, no network. Runs in about a second.
 | `test_calculation.py` | 148 | The projection, its chart line, and which fields the model may see. |
 | `test_chart_payloads.py` | 145 | Which visual an intent earns, and the bar payloads. |
 | `test_districts.py` | 73 | Canonicalisation across CGWB's spellings. |
+| `test_followups.py` | 128 | Resolving "those two" against the conversation. |
 | `test_rag.py` | 148 | Page offset, section map, chunk metadata, and the rerank. |
 
 ---
@@ -145,6 +146,18 @@ Take *"How many years until Ludhiana hits critical depth?"*
 **1 — Understanding.** The model returns constrained JSON:
 `{intent: "years_to_critical", district: "Ludhiana"}`. The district is then
 re-canonicalised in Python, so a typo cannot reach the database.
+
+A follow-up gets the last four turns as context, which is enough for *"and what
+about Moga?"*, *"how fast is it falling there?"* and *"how many years until it
+hits critical depth?"* to resolve. One shape needed more than context: *"which
+of those two is worse?"* was classified as a ranking, measured against all 23
+districts, and answered **Barnala** — a district nobody had mentioned, and
+verified, because Barnala genuinely is in the ranking data. A superlative
+pointing back at the conversation is a comparison of what was discussed, so it
+is converted to one when the question names no district of its own and recent
+turns named between two and four. Outside those bounds the intent is left alone:
+*"which district has the worst water table?"* is still a real ranking
+mid-conversation.
 
 **2 — Retrieval (no model).** `years_to_critical` maps to two service calls:
 depletion rate and current level. Real SQL, real rows.
@@ -343,7 +356,7 @@ test bounces the server.
 cd backend && python -m pytest tests/
 ```
 
-86 tests, about a second, no model or database needed.
+102 tests, about a second, no model or database needed.
 
 ---
 

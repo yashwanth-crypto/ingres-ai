@@ -11,7 +11,8 @@ hybrid retrieval, React frontend. 10 of 11 test questions answer cleanly.
 Branch `feat/answer-visuals`, ahead of `main`, **no remote**. The work on it:
 the projection is drawn, ranked and compared answers get charts, three
 verification holes are closed, the RAG index is rebuilt with real metadata and
-correct page citations, and there is a test suite.
+correct page citations, follow-ups are tested and one broken shape fixed, and
+there is a 102-test suite.
 
 That is a working system. It is not yet a *good* one, for the reasons below.
 
@@ -52,16 +53,31 @@ A stray brace and a key used as a citation. Grounding check 1 misses it because
 only capitalised tokens are treated as citations — so this is cosmetic to the
 checks and glaring to a reader.
 
-Switching `LLM_PROVIDER=anthropic` costs about $0.02 a question and fixes most
-of this without touching any code. Worth doing for the demo regardless of what
-else changes.
+Switching `LLM_PROVIDER=anthropic` would cost about $0.02 a question and fix
+most of this without touching any code. **That has been decided against** — the
+system is meant to hold up on a free local model, and "correct answers on a 7B"
+is a stronger claim than "we used a good model".
 
-### 3. Follow-up questions are untested
+So this needs its own fix. The field-name citations are the same class as the
+`projected_year` leak, which was solved by withholding the field from the prompt
+rather than by asking the model not to quote it; `slim_for_prompt()` is the
+place to look. The stilted shape is harder and may simply be the cost of the
+decision.
 
-`history` is passed to the Query Understanding agent and truncated to four
-turns, but nobody has tested whether *"and what about Moga?"* or *"is that
-getting worse?"* actually resolves. It may well not. A judge will try it —
-conversation is the entire premise of a chat interface.
+### 3. Follow-up questions work, with one shape now guarded
+
+Tested at last. Five of six shapes already resolved: *"and what about Moga?"*,
+*"how fast is it falling there?"*, *"is that getting worse?"*, *"how many years
+until it hits critical depth?"*, *"how does it compare to Moga?"*.
+
+The sixth did not. After Bathinda and Moga, *"which of those two is worse?"* was
+ranked against all 23 districts and answered **Barnala** — never mentioned, and
+verified, because Barnala really is in the ranking data. Fixed in the prompt and
+guarded deterministically.
+
+What is still untested: four or more turns deep, a follow-up that changes topic
+between the database and the report, and a follow-up after an out-of-scope
+refusal. The window is four turns, so anything relying on the fifth is gone.
 
 ### 4. The RAG corpus is still one document
 
@@ -135,9 +151,13 @@ firewall.
   "13.9% of samples across Punjab" instead of "in Bathinda, 13.9%". It cannot
   stop a reader drawing the same conclusion from two adjacent sentences, and it
   covers percentages only.
-- **Tests cover the deterministic core only.** Nothing exercises the SQL layer,
-  the ingestion cleaning rules, or an end-to-end `/chat` call. The ingestion
-  rules in particular are pure functions and would be easy to add.
+- **Tests cover the deterministic core only.** 102 of them, but nothing
+  exercises the SQL layer, the ingestion cleaning rules, or an end-to-end
+  `/chat` call. The ingestion rules in particular are pure functions and would
+  be easy to add.
+- **Nobody has looked at the charts.** Every visual claim rests on geometry and
+  computed styles; the browser pane never composited. Open the app and ask the
+  Ludhiana projection and "worst water table" questions before trusting them.
 
 ---
 
@@ -145,11 +165,11 @@ firewall.
 
 1. **Streaming.** Biggest perceived win, and the verification-visible variant is
    genuinely novel rather than cosmetic.
-2. **Switch to Claude for the demo.** One line, ten cents, and it takes most of
-   problem 2 with it.
-3. **Test the follow-up path**, then fix it. Cheap, and table stakes for a chat
-   product.
-4. **Style the message bubble and citations.** The last plain surface.
+2. **Fix the field-name citations** in the prose. This was filed under "switch
+   to Claude and it goes away"; with the swap decided against it needs its own
+   fix, and it is the same class as the `projected_year` leak already solved by
+   withholding the field from the prompt.
+3. **Style the message bubble and citations.** The last plain surface.
 5. **More documents in the corpus** — the Year Book and state policy. Metadata
    and reranking are in place, so expansion no longer scales the failure mode.
 6. Deploy, if time remains.
@@ -176,6 +196,12 @@ seven checks exist because a wrong figure passed one that only asked whether the
 number appeared *somewhere*. In a projection answer every number does. `20.1` is
 real; it is the number of years, and the sentence called it a depth. `13.9%` is
 real; it is Punjab's, and the sentence gave it to Bathinda.
+
+**Test the thing nobody has run.** `history` was wired in from the first day
+and exercised for the first time today. Five of six shapes worked, which is why
+it had never been noticed that the sixth answered with a district nobody had
+mentioned. Code that has never been run is not working code; it is untested
+code that happens to compile.
 
 **Metadata describes a chunk; misattribution happens in a sentence.** Tagging
 every chunk with its districts and scope was the right move and did not, on its
