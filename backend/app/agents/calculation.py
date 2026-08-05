@@ -53,6 +53,7 @@ def calculation_agent(
     rate = rate_block["rate_m_per_year"]
     stations = len(rate_block["stations_used"])
     years_window = rate_block["years_analyzed"]
+    from_year = level["date"].year
 
     remaining = reference_depth_m - current_depth
 
@@ -74,7 +75,8 @@ def calculation_agent(
         note = (
             f"Straight-line projection from a district mean of "
             f"{current_depth:.1f} m at {rate:.2f} m/year, the median trend across "
-            f"{stations} stations over the last {years_window} years. "
+            f"{stations} stations over the last {years_window} years, reaching "
+            f"{reference_depth_m:.0f} m around {round(from_year + years)}. "
             f"It assumes the current rate holds and ignores policy change, "
             f"rainfall variation and aquifer behaviour, so treat it as an order "
             f"of magnitude, not a date."
@@ -89,6 +91,13 @@ def calculation_agent(
         "current_depth_m": round(current_depth, 2),
         "reference_depth_m": reference_depth_m,
         "stations_used": stations,
+        # Stated outright rather than left as arithmetic for the model. Asked
+        # this question it wrote "approximately 20 years (2034)" - the span was
+        # right and the year was invented, because nothing supplied the year and
+        # nothing checked it. Both halves of that are fixed: the figure is given
+        # here, and grounding check 5 now verifies whatever is written.
+        "from_year": from_year,
+        "projected_year": round(from_year + years) if years is not None else None,
         "confidence_note": note,
         "threshold_caveat": (
             "CGWB's 'critical' category measures extraction versus recharge, not "

@@ -146,6 +146,27 @@ def grounding_issues(draft: str, raw_data: dict) -> list[str]:
                     f"not a CGWB threshold."
                 )
 
+    # --- 5. A projected arrival year must be the year the data computed ---
+    # Check 2 exempts every 1900-2100 integer, because citations legitimately
+    # carry years ("CGWB, 2024"). That exemption is a hole: asked how long until
+    # Ludhiana reaches 30 m, the draft said "approximately 20 years (2034)" when
+    # the projection gives 2044, and nothing objected - on the one question
+    # where the year is the headline. A year *after* the last reading cannot be
+    # a citation, so the only thing it can be is the projection's arrival year.
+    projected_year = projection.get("projected_year")
+    from_year = projection.get("from_year")
+    if projected_year and from_year:
+        for raw in re.findall(r"(?<![\d.])((?:19|20)\d{2})\b", prose):
+            year = int(raw)
+            # One year of slack: the projection lands mid-year, and rounding it
+            # either way is a fair reading rather than a fabrication.
+            if year > from_year and abs(year - projected_year) > 1:
+                issues.append(
+                    f"The draft gives {year} as the year the "
+                    f"{projection.get('reference_depth_m'):g} m reference depth "
+                    f"is reached, but the projection gives {projected_year}."
+                )
+
     # De-duplicate while preserving order.
     seen, unique = set(), []
     for issue in issues:
