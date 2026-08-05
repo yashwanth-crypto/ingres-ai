@@ -94,11 +94,31 @@ body {
   animation: bounceDot 1.2s ease-in-out infinite;
 }
 
+/* Ranked bars sweep out from the label rather than appearing at full length.
+   Only the transform animates - each bar's width is already final in the
+   markup. An earlier version transitioned the width itself up from zero, which
+   left every bar empty whenever the frames never arrived, and a bar chart that
+   renders at zero length is worse than one that does not animate at all. */
+@keyframes barGrow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.bar-grow {
+  transform-origin: left center;
+  animation: barGrow 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .water-table,
   .well-pulse,
   .fade-up,
   .message-in,
+  .bar-grow,
   .dot {
     animation: none !important;
   }

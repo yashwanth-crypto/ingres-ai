@@ -7,6 +7,8 @@ import {
   useMap,
 } from "react-leaflet";
 
+import { categoryColor } from "../categories.js";
+
 /**
  * Leaflet measures its container once, at mount. Here the container is still
  * settling at that moment - the message list grows as the answer renders and
@@ -43,14 +45,6 @@ function FitToPoints({ points }) {
   return null;
 }
 
-// CGWB assessment categories, worst to best.
-const CATEGORY_COLOR = {
-  "over-exploited": "#b91c1c",
-  critical: "#ea580c",
-  "semi-critical": "#d97706",
-  safe: "#15803d",
-};
-
 export default function MapView({ data }) {
   const points = data?.points ?? [];
   if (!points.length) return null;
@@ -74,7 +68,7 @@ export default function MapView({ data }) {
             <span key={c} className="flex items-center gap-1.5 text-xs text-slate-600">
               <span
                 className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ background: CATEGORY_COLOR[c] ?? "#78716c" }}
+                style={{ background: categoryColor(c) }}
               />
               {c}
             </span>
@@ -101,7 +95,7 @@ export default function MapView({ data }) {
             pathOptions={{
               color: "#fff",
               weight: 2,
-              fillColor: CATEGORY_COLOR[p.category] ?? "#78716c",
+              fillColor: categoryColor(p.category),
               fillOpacity: 0.85,
             }}
           >

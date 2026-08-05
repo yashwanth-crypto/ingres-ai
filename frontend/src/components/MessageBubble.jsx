@@ -1,4 +1,5 @@
 import MapView from "./MapView.jsx";
+import RankChart from "./RankChart.jsx";
 import TrendChart from "./TrendChart.jsx";
 
 export default function MessageBubble({ message }) {
@@ -57,7 +58,11 @@ export default function MessageBubble({ message }) {
         )}
       </div>
 
-      {message.chart_data && <TrendChart data={message.chart_data} />}
+      {message.chart_data?.type === "bars" ? (
+        <RankChart data={message.chart_data} />
+      ) : (
+        message.chart_data && <TrendChart data={message.chart_data} />
+      )}
       {message.map_data && <MapView data={message.map_data} />}
     </div>
   );
