@@ -6,6 +6,8 @@ Wires the five agents together and decides what the user finally sees.
 from __future__ import annotations
 
 import logging
+import re
+from collections.abc import Iterator
 
 from sqlalchemy.orm import Session
 
@@ -45,38 +47,93 @@ OUT_OF_SCOPE_MESSAGES = {"no_quality_data": NO_QUALITY_DATA}
 
 
 def handle_chat(db: Session, message: str, history: list[dict] | None = None) -> dict:
-    """Run the pipeline. Always returns a usable response, never raises."""
+    """Run the pipeline and return the finished answer. Never raises.
+
+    A thin wrapper over `run_chat`, which is the real implementation. The plain
+    endpoint and the streaming one share that one generator, so they can never
+    answer the same question two different ways.
+    """
+    result: dict = {}
+    for event in run_chat(db, message, history):
+        if event["stage"] == "done":
+            result = event["result"]
+    return result
+
+
+def run_chat(
+    db: Session, message: str, history: list[dict] | None = None
+) -> Iterator[dict]:
+    """Run the pipeline, saying what it is doing as it does it.
+
+    Yields progress events, then `{"stage": "done", "result": {...}}` exactly
+    once. Answering takes 3 to 15 seconds and the interface spent all of it
+    showing three bouncing dots; the work being done is the interesting part of
+    this system and none of it was visible.
+
+    Every detail is read off the real data. A stage that says 75 stations means
+    75 rows came back - a progress indicator that reports invented work is a
+    worse lie than a spinner, because it looks like evidence.
+    """
+    yield _stage("understanding", "Reading the question")
     try:
         intent = query_understanding_agent(message, history)
     except LLMUnavailable as exc:
-        return _error(str(exc))
+        yield _done(_error(str(exc)))
+        return
 
     if intent.intent == "out_of_scope":
-        return {
-            "answer": OUT_OF_SCOPE_MESSAGES.get(
-                intent.out_of_scope_reason or "", OUT_OF_SCOPE
-            ),
-            "citations": [],
-            "chart_data": None,
-            "map_data": None,
-            "intent": intent.intent,
-        }
+        yield _done(
+            {
+                "answer": OUT_OF_SCOPE_MESSAGES.get(
+                    intent.out_of_scope_reason or "", OUT_OF_SCOPE
+                ),
+                "citations": [],
+                "chart_data": None,
+                "map_data": None,
+                "intent": intent.intent,
+            }
+        )
+        return
 
+    yield _stage("understood", "Understood", _intent_summary(intent))
+
+    document = intent.intent == "document_question"
+    yield _stage(
+        "retrieving",
+        "Searching the CGWB report" if document else "Querying the monitoring data",
+    )
     try:
         raw_data = retrieval_agent(db, intent)
     except gw.DistrictNotFound:
-        return {
-            "answer": OUT_OF_SCOPE,
-            "citations": [],
-            "chart_data": None,
-            "map_data": None,
-            "intent": "out_of_scope",
-        }
+        yield _done(
+            {
+                "answer": OUT_OF_SCOPE,
+                "citations": [],
+                "chart_data": None,
+                "map_data": None,
+                "intent": "out_of_scope",
+            }
+        )
+        return
+
+    yield _stage("retrieved", "Retrieved", _retrieved_summary(raw_data))
 
     if intent.intent == "years_to_critical":
+        yield _stage("calculating", "Projecting forward")
         raw_data = calculation_agent(raw_data)
+        projection = raw_data.get("projection") or {}
+        if projection.get("years_to_reference_depth") is not None:
+            yield _stage(
+                "calculated",
+                "Projected",
+                f"{projection['years_to_reference_depth']} years to "
+                f"{projection['reference_depth_m']:.0f} m, at "
+                f"{projection['current_rate_m_per_year']} m/year",
+            )
 
     _name_the_sources(raw_data)
+
+    yield _stage("drafting", "Writing the answer")
 
     try:
         try:
@@ -87,20 +144,31 @@ def handle_chat(db: Session, message: str, history: list[dict] | None = None) ->
             # retrieved data is untouched by that, and showing it beats telling
             # someone their question failed when we hold the answer to it.
             log.error("No usable draft (%s) - showing the retrieved data", exc)
-            return {
-                "answer": _data_dump(raw_data, [f"the model produced no usable answer ({exc})"]),
-                "citations": _citations(raw_data),
-                "chart_data": _chart(db, intent, raw_data) if _wants_chart(intent) else None,
-                "map_data": _map(db, intent, raw_data) if _wants_map(intent, raw_data) else None,
-                "intent": intent.intent,
-                "verified": False,
-                "source": "report" if raw_data.get("passages") else "database",
-            }
+            yield _stage("unusable", "No usable answer — showing the data instead")
+            yield _done(
+                {
+                    "answer": _data_dump(raw_data, [f"the model produced no usable answer ({exc})"]),
+                    "citations": _citations(raw_data),
+                    "chart_data": _chart(db, intent, raw_data) if _wants_chart(intent) else None,
+                    "map_data": _map(db, intent, raw_data) if _wants_map(intent, raw_data) else None,
+                    "intent": intent.intent,
+                    "verified": False,
+                    "source": "report" if raw_data.get("passages") else "database",
+                }
+            )
+            return
 
+        yield _stage("checking", "Checking every figure", _checking_summary(draft.answer))
         hard, soft = _check(draft.answer, raw_data)
 
         if hard or soft:
             log.warning("Rejected draft - hard=%s soft=%s", hard, soft)
+            yield _stage(
+                "rewriting",
+                "Rewriting",
+                f"{len(hard) + len(soft)} objection"
+                f"{'' if len(hard) + len(soft) == 1 else 's'} to answer",
+            )
             first = (draft, hard, soft)
             try:
                 draft = response_agent(raw_data, message, issues=hard + soft)
@@ -130,39 +198,126 @@ def handle_chat(db: Session, message: str, history: list[dict] | None = None) ->
                 # A fabricated citation, figure or district survived the retry.
                 # Show the data rather than an answer we cannot stand behind.
                 log.error("Grounding still failed after retry: %s", hard)
-                return {
-                    "answer": _data_dump(raw_data, hard),
-                    "citations": [],
-                    "chart_data": _chart(db, intent, raw_data),
-                    "map_data": _map(db, intent, raw_data),
-                    "intent": intent.intent,
-                    "verified": False,
-                }
+                yield _stage(
+                    "rejected", "Could not verify — showing the data instead", hard[0]
+                )
+                yield _done(
+                    {
+                        "answer": _data_dump(raw_data, hard),
+                        "citations": [],
+                        "chart_data": _chart(db, intent, raw_data),
+                        "map_data": _map(db, intent, raw_data),
+                        "intent": intent.intent,
+                        "verified": False,
+                    }
+                )
+                return
             if soft:
                 # Grounding is clean; only the LLM reviewer still objects, and
                 # it has already been observed objecting to figures that are
                 # present in the data. Ship the answer, flag the caveat.
                 log.info("Accepting draft over soft objections: %s", soft)
     except LLMUnavailable as exc:
-        return _error(str(exc))
+        yield _done(_error(str(exc)))
+        return
 
-    return {
-        "answer": draft.answer,
-        # Built from the retrieved data, not from the model. Small models
-        # reliably write citations inline in the prose but leave the structured
-        # field empty, and the data already knows exactly what backed the answer.
-        "citations": _citations(raw_data),
-        # Decided from the intent, not from a model-set boolean. The model was
-        # observed leaving both flags false on questions that plainly wanted a
-        # visual, and this is a rule, not a judgement call.
-        "chart_data": _chart(db, intent, raw_data) if _wants_chart(intent) else None,
-        "map_data": _map(db, intent, raw_data) if _wants_map(intent, raw_data) else None,
-        "intent": intent.intent,
-        "verified": True,
-        "review_notes": soft,
-        # Which of the two sources answered, so the interface can show it.
-        "source": "report" if raw_data.get("passages") else "database",
+    yield _stage("verified", "Verified", _verified_summary(raw_data))
+    yield _done(
+        {
+            "answer": draft.answer,
+            # Built from the retrieved data, not from the model. Small models
+            # reliably write citations inline in the prose but leave the
+            # structured field empty, and the data already knows exactly what
+            # backed the answer.
+            "citations": _citations(raw_data),
+            # Decided from the intent, not from a model-set boolean. The model
+            # was observed leaving both flags false on questions that plainly
+            # wanted a visual, and this is a rule, not a judgement call.
+            "chart_data": _chart(db, intent, raw_data) if _wants_chart(intent) else None,
+            "map_data": _map(db, intent, raw_data) if _wants_map(intent, raw_data) else None,
+            "intent": intent.intent,
+            "verified": True,
+            "review_notes": soft,
+            # Which of the two sources answered, so the interface can show it.
+            "source": "report" if raw_data.get("passages") else "database",
+        }
+    )
+
+
+# --------------------------------------------------------------------------
+# Progress events
+# --------------------------------------------------------------------------
+
+
+def _stage(stage: str, label: str, detail: str = "") -> dict:
+    return {"stage": stage, "label": label, "detail": detail}
+
+
+def _done(result: dict) -> dict:
+    return {"stage": "done", "result": result}
+
+
+def _intent_summary(intent: QueryIntent) -> str:
+    """What the question was taken to mean, in the reader's terms."""
+    kinds = {
+        "current_status": "current level",
+        "depletion_trend": "rate of fall",
+        "risk_category": "CGWB category",
+        "comparison": "comparison",
+        "years_to_critical": "projection",
+        "ranking": "ranking across Punjab",
+        "document_question": "question for the CGWB report",
     }
+    kind = kinds.get(intent.intent, intent.intent)
+    where = intent.district or ", ".join(intent.districts)
+    return f"{kind} · {where}" if where else kind
+
+
+def _retrieved_summary(raw_data: dict) -> str:
+    """What actually came back. Counted, never estimated."""
+    passages = raw_data.get("passages")
+    if passages:
+        pages = sorted({p["page"] for p in passages})
+        return (
+            f"{len(passages)} passage{'' if len(passages) == 1 else 's'}, "
+            f"p. {', p. '.join(str(p) for p in pages)}"
+        )
+
+    parts = []
+    level = raw_data.get("current_level")
+    if level:
+        parts.append(
+            f"{level['stations_reporting']} stations reporting on {level['date']}"
+        )
+    rate = raw_data.get("depletion_rate")
+    if rate:
+        parts.append(
+            f"{len(rate['stations_used'])} station trends over "
+            f"{rate['years_analyzed']} years"
+        )
+    if raw_data.get("ranking"):
+        parts.append(f"{raw_data.get('districts_ranked')} districts ranked")
+    comparison = raw_data.get("comparison")
+    if comparison:
+        parts.append(f"{len(comparison.get('districts', []))} districts compared")
+    listing = raw_data.get("category_listing")
+    if listing:
+        parts.append(f"{len(listing)} districts in that category")
+    if raw_data.get("unavailable"):
+        parts.append(str(raw_data["unavailable"]))
+    return "; ".join(parts) or "nothing matching"
+
+
+def _checking_summary(draft: str) -> str:
+    figures = len(re.findall(r"(?<![\d.])-?\d+(?:\.\d+)?", draft))
+    return f"7 checks over {figures} figure{'' if figures == 1 else 's'}"
+
+
+def _verified_summary(raw_data: dict) -> str:
+    sources = len(_citations(raw_data))
+    if not sources:
+        return "every figure traced to the data"
+    return f"every figure traced to {sources} source{'' if sources == 1 else 's'}"
 
 
 def _check(draft: str, raw_data: dict) -> tuple[list[str], list[str]]:

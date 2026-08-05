@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { sendMessage } from "../api.js";
+import { streamMessage } from "../api.js";
 import AquiferHero from "./AquiferHero.jsx";
 import MessageBubble from "./MessageBubble.jsx";
+import PipelineProgress, { foldStage } from "./PipelineProgress.jsx";
 
 export default function ChatWindow() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [stages, setStages] = useState([]);
   const [error, setError] = useState(null);
   const endRef = useRef(null);
   const scrollerRef = useRef(null);
@@ -24,7 +26,9 @@ export default function ChatWindow() {
     // so re-pin once they have settled.
     const again = [setTimeout(toEnd, 260), setTimeout(toEnd, 900)];
     return () => again.forEach(clearTimeout);
-  }, [messages, busy]);
+    // `stages` too: the progress list grows a line at a time while the answer
+    // is being worked out, and each one pushes the view down.
+  }, [messages, busy, stages]);
 
   async function ask(text) {
     const question = text.trim();
@@ -34,10 +38,13 @@ export default function ChatWindow() {
     setInput("");
     const history = messages;
     setMessages([...history, { role: "user", content: question }]);
+    setStages([]);
     setBusy(true);
 
     try {
-      const reply = await sendMessage(question, history);
+      const reply = await streamMessage(question, history, (event) =>
+        setStages((s) => foldStage(s, event)),
+      );
       setMessages((m) => [
         ...m,
         {
@@ -70,20 +77,7 @@ export default function ChatWindow() {
               <MessageBubble key={i} message={m} />
             ))}
 
-            {busy && (
-              <div className="flex items-center gap-2.5 text-sm text-slate-500">
-                <span className="flex gap-1">
-                  {[0, 1, 2].map((i) => (
-                    <span
-                      key={i}
-                      className="dot inline-block h-1.5 w-1.5 rounded-full bg-depth-600"
-                      style={{ animationDelay: `${i * 0.15}s` }}
-                    />
-                  ))}
-                </span>
-                Retrieving data and checking every figure&hellip;
-              </div>
-            )}
+            {busy && <PipelineProgress steps={stages} />}
           </div>
         )}
 
