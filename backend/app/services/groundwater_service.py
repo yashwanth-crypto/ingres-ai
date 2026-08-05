@@ -297,6 +297,21 @@ def district_series(db: Session, district: str, years: int = 25) -> list[dict]:
     ]
 
 
+def categories_for(db: Session, districts: list[str]) -> dict[str, str]:
+    """Category per district, in one query.
+
+    Colouring a chart of eight districts one `risk_category()` call at a time
+    is eight round trips for data a single `IN` answers.
+    """
+    names = [resolve_district(d) for d in districts]
+    rows = db.execute(
+        select(RiskCategory.district, RiskCategory.category).where(
+            RiskCategory.district.in_(names)
+        )
+    ).all()
+    return {district: category for district, category in rows}
+
+
 def district_points(db: Session, districts: list[str]) -> list[dict]:
     """One map point per district: mean station location plus its category."""
     out = []

@@ -82,8 +82,20 @@ def handle_chat(db: Session, message: str, history: list[dict] | None = None) ->
 
         if hard or soft:
             log.warning("Rejected draft - hard=%s soft=%s", hard, soft)
+            first = (draft, hard, soft)
             draft = response_agent(raw_data, message, issues=hard + soft)
             hard, soft = _check(draft.answer, raw_data)
+
+            if hard and not first[1]:
+                # The first draft was properly grounded and only the advisory
+                # reviewer objected. Told to address its notes, the rewrite
+                # introduced a real grounding failure the original never had -
+                # asked to mention the pumping limit, it credited the 30 m
+                # figure to CGWB. Falling through would replace a correct
+                # answer with a data dump on the strength of a nitpick, which
+                # is the veto this reviewer is explicitly not meant to have.
+                log.info("Rewrite introduced %s - keeping first draft", hard)
+                draft, hard, soft = first
 
             if hard:
                 # A fabricated citation, figure or district survived the retry.
@@ -220,8 +232,21 @@ def _citations(raw_data: dict) -> list[dict]:
 
 
 def _wants_chart(intent: QueryIntent) -> bool:
-    """A single district's history over time is worth plotting."""
-    return intent.intent in ("current_status", "depletion_trend", "years_to_critical")
+    """One district over time, or several against each other.
+
+    Ranking and comparison were absent here, so "which district has the worst
+    water table?" returned eight districts with real figures and drew none of
+    them - the map showed *where* they were and nothing showed *how bad*, which
+    is the entire question. A category listing is still excluded: every bar
+    would be the same length and the same colour, and the map already says it.
+    """
+    return intent.intent in (
+        "current_status",
+        "depletion_trend",
+        "years_to_critical",
+        "ranking",
+        "comparison",
+    )
 
 
 def _wants_map(intent: QueryIntent, raw_data: dict) -> bool:
@@ -234,19 +259,134 @@ def _wants_map(intent: QueryIntent, raw_data: dict) -> bool:
 
 
 def _chart(db: Session, intent: QueryIntent, raw_data: dict) -> dict | None:
+    """Bars when the answer is about several districts, a line when it is one."""
+    return _bars(db, raw_data) or _line(db, intent, raw_data)
+
+
+def _bars(db: Session, raw_data: dict) -> dict | None:
+    """Districts side by side, worst first.
+
+    Ranked and compared answers are about relative magnitude, and a list of
+    numbers in prose makes the reader do the comparing. Bars do it for them.
+    """
+    ranking = raw_data.get("ranking")
+    comparison = (raw_data.get("comparison") or {}).get("districts")
+
+    if ranking:
+        rows = [
+            {"label": r["district"], "value": r["value"], "stations": r.get("stations")}
+            for r in ranking
+        ]
+        unit = ranking[0].get("unit", "")
+        # The winner is named so the chart agrees with the sentence above it,
+        # which states it outright for reasons documented in the Retrieval agent.
+        answer = (raw_data.get("answer_is") or {}).get("district")
+        by = raw_data.get("ranked_by")
+        title = (
+            "Rate of fall by district"
+            if by == "depletion"
+            else "Depth to water by district"
+        )
+        counted = raw_data.get("districts_ranked")
+        note = f"Worst first. {len(rows)} of {counted} districts shown." if counted else ""
+    elif comparison:
+        rows = [
+            {"label": r["district"], "value": r["value_m"], "category": r["category"]}
+            for r in comparison
+        ]
+        unit = "m below ground"
+        answer = None
+        title = "Depth to water"
+        note = "Latest reading in each district."
+    else:
+        return None
+
+    # A district CGWB assessed but the network does not reach has no bar to
+    # draw. It is named rather than silently missing - Malerkotla is the case.
+    unavailable = [r["label"] for r in rows if r["value"] is None]
+    bars = [r for r in rows if r["value"] is not None]
+    if not bars:
+        return None
+
+    categories = gw.categories_for(db, [b["label"] for b in bars])
+    for bar in bars:
+        bar.setdefault("category", categories.get(bar["label"]))
+
+    return {
+        "type": "bars",
+        "title": title,
+        "unit": unit,
+        "note": note,
+        "bars": bars,
+        "highlight": answer,
+        "unavailable": unavailable,
+    }
+
+
+def _line(db: Session, intent: QueryIntent, raw_data: dict) -> dict | None:
     district = intent.district or (intent.districts[0] if intent.districts else None)
     if not district:
         return None
     series = gw.district_series(db, district)
     if len(series) < 2:
         return None
-    return {
+    chart = {
         "type": "line",
         "district": district,
         "y_label": "Depth to water (m below ground)",
         "note": "Larger values mean a deeper water table.",
         "series": series,
     }
+    forward = _projection_line(series, raw_data.get("projection"))
+    if forward:
+        chart["projection"] = forward
+    return chart
+
+
+def _projection_line(series: list[dict], projection: dict | None) -> dict | None:
+    """The forward line for a years-to-depth answer, as its two endpoints.
+
+    The projection is a straight line by construction, so two points describe it
+    exactly - there is nothing to gain from interpolating more.
+
+    Anchored on the district mean the Calculation Agent actually used, which is
+    the mean across stations on the latest *reading date*. The history line
+    plots an annual mean, so the two rarely coincide exactly. The anchor is
+    drawn where the calculation put it rather than snapped onto the history
+    line: the projection must show the number the answer quotes.
+    """
+    if not projection:
+        return None
+
+    years = projection.get("years_to_reference_depth")
+    depth = projection.get("current_depth_m")
+    reference = projection.get("reference_depth_m")
+    if reference is None:
+        return None
+
+    line = {
+        "series": [],
+        "reference_depth_m": reference,
+        "rate_m_per_year": projection.get("current_rate_m_per_year"),
+        "years": years,
+        "reaches_year": None,
+        # Restated on the chart because a dashed line crossing a labelled
+        # threshold reads as an official forecast unless it says otherwise.
+        "caveat": projection.get("threshold_caveat", ""),
+    }
+
+    # `years` is None when the table is not falling, and 0.0 when it is already
+    # at or past the reference depth. Neither describes a line going forward, so
+    # only the reference depth is drawn - the caption carries the reason.
+    if years:
+        start = series[-1]["year"]
+        line["series"] = [
+            {"year": start, "projected_depth_m": round(depth, 2)},
+            {"year": round(start + years, 1), "projected_depth_m": reference},
+        ]
+        line["reaches_year"] = round(start + years, 1)
+
+    return line
 
 
 def _map(db: Session, intent: QueryIntent, raw_data: dict) -> dict | None:
