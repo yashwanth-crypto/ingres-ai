@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from app.agents.grounding import grounding_issues
-from app.agents.orchestrator import _data_dump, _name_the_sources
+from app.agents.orchestrator import _citations, _data_dump, _name_the_sources
 from app.services.llm_client import LLMGarbledResponse, LLMUnavailable, slim_for_prompt
 
 
@@ -132,6 +132,41 @@ def test_the_dump_quotes_the_passages_for_a_report_question():
     dump = _data_dump(data, ["the model produced no usable answer"])
     assert "p. 58" in dump
     assert "0.01 to 22 mg/L" in dump
+
+
+def test_one_page_cited_twice_is_listed_once():
+    """Retrieval returning two chunks from page 11 listed page 11 twice, which
+    tells the reader nothing except where the chunker happened to split."""
+    data = {
+        "passages": [
+            {"citation": "CGWB, Ground Water Resources of Punjab 2024, p. 58", "page": 58},
+            {"citation": "CGWB, Ground Water Resources of Punjab 2024, p. 11", "page": 11},
+            {"citation": "CGWB, Ground Water Resources of Punjab 2024, p. 11", "page": 11},
+        ]
+    }
+    pages = [c["station"] for c in _citations(data)]
+    assert pages == [
+        "CGWB, Ground Water Resources of Punjab 2024, p. 58",
+        "CGWB, Ground Water Resources of Punjab 2024, p. 11",
+    ]
+
+
+def test_distinct_sources_are_all_kept():
+    data = {
+        "current_level": {
+            "district": "Ludhiana",
+            "value_m": 18.15,
+            "station": "Basian Bet M",
+            "date": "2024-01-01",
+        },
+        "depletion_rate": {
+            "district": "Ludhiana",
+            "rate_m_per_year": 0.504,
+            "stations_used": ["a", "b"],
+            "years_analyzed": 15,
+        },
+    }
+    assert len(_citations(data)) == 2
 
 
 def test_the_dump_still_reports_database_figures():

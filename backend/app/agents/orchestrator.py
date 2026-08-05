@@ -287,7 +287,15 @@ def _citations(raw_data: dict) -> list[dict]:
                     {"station": row["district"], "date": str(row["date"])}
                 )
 
-    return out
+    # Two chunks retrieved from one page cite that page twice. Listing it twice
+    # says nothing except that the retrieval happened to split it there.
+    seen, unique = set(), []
+    for citation in out:
+        key = (citation["station"], citation["date"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(citation)
+    return unique
 
 
 def _wants_chart(intent: QueryIntent) -> bool:
