@@ -349,15 +349,29 @@ over the retrieved data first. It cannot hallucinate, and it catches:
 - a figure matching no value in the data (with rounding tolerance)
 - a district the retrieved data does not cover
 - a non-CGWB threshold attributed to CGWB
+- a projected arrival year that is not the year the data computed
+- a figure written with a unit that matches no value *of that unit*
+
+The last two were added after the first four passed answers that were wrong.
+Checking membership alone let *"approximately 20 years (2034)"* through when the
+projection gives 2044, and *"a reference depth of 20.1 metres"* through because
+20.1 really is in the data — as the number of years. **Being in the data is not
+the same as measuring what the sentence says it measures.**
 
 These are the **blocking** gate. The LLM reviewer is **advisory** — it catches
 nuance the rules cannot (a dropped caveat, a projection stated as fact) but
 also objects to figures that are genuinely present, so it triggers one rewrite
-rather than a block. If grounding still fails after that rewrite, the answer
+rather than a block. A rewrite that introduces a grounding failure the original
+did not have is discarded, so an advisory objection can never turn a clean
+answer into a data dump. If grounding still fails after the rewrite, the answer
 is replaced by a plain data dump saying so.
 
-Guard accuracy on its test cases: 7/7, with no false positives on rounded
-figures, `(CGWB, 2024)`-style citations, or prose parentheticals.
+All six checks are covered by tests, including both failures above, so neither
+can come back:
+
+```bash
+cd backend && python -m pytest tests/
+```
 
 ## Hybrid retrieval — database *and* document
 
@@ -417,15 +431,21 @@ backend/
       districts.py     canonical Punjab districts + spelling variants
       ingest_data.py   the ingestion script
   data/raw/            raw CSVs (gitignored)
+  data/rag/            committed chunk + vector index
+  tests/               pytest over the deterministic pieces
 frontend/              Phase 4
 ```
 
 ## Build order
 
-1. **Data** — ingest and verify counts ← *you are here*
-2. **Backend core** — 4 tool endpoints, then deploy skeleton to Railway
-3. **Agents** — 7.1 → 7.6, unit-tested individually
-4. **Frontend** — chat UI against the deployed backend
-5. **Integration testing** — ambiguous and out-of-scope questions
-6. **Polish** — suggested questions, citations, `/health`
-7. **Demo prep** — rehearse against the deployed URL, local fallback ready
+1. ~~**Data** — ingest and verify counts~~
+2. ~~**Backend core** — tool endpoints~~ *(Railway skipped — see below)*
+3. ~~**Agents** — 7.1 → 7.6~~
+4. ~~**Frontend** — chat UI~~
+5. ~~**Integration testing** — ambiguous and out-of-scope questions~~
+6. ~~**Polish** — suggested questions, citations, `/health`~~
+7. **Demo prep** ← *you are here*
+
+Deployment was skipped deliberately: this network blocks every database port,
+so Railway was unusable during development and the demo runs locally.
+[HANDOFF.md](HANDOFF.md) has what is still weak and what to do next.

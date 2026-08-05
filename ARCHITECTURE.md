@@ -78,9 +78,9 @@ report, which caught **4 wrong categories** in the first attempt.
 
 | File | Lines | Job |
 |---|---|---|
-| `services/groundwater_service.py` | 345 | All SQL. Current level, depletion rate, risk category, blocks, comparison, ranking, yearly series, map points. No FastAPI imports, so agents call it directly instead of looping back over HTTP. |
+| `services/groundwater_service.py` | 360 | All SQL. Current level, depletion rate, risk category, blocks, comparison, ranking, yearly series, map points, categories in bulk. No FastAPI imports, so agents call it directly instead of looping back over HTTP. |
 | `services/rag_service.py` | 91 | Semantic search over the report. Vectors are pre-normalised, so search is a dot product over a 762 KB matrix — no vector database. Passages below 0.55 similarity are discarded rather than answered from. |
-| `services/llm_client.py` | 224 | The model boundary. One interface, two backends. Handles structured output, refusals, and a retry when a small model runs out of tokens mid-JSON. |
+| `services/llm_client.py` | 233 | The model boundary. One interface, two backends. Handles structured output, refusals, and a retry when a small model runs out of tokens mid-JSON. `slim_for_prompt()` also withholds fields the checks read but the model must not see. |
 
 ### Agents — `backend/app/agents/`
 
@@ -88,11 +88,11 @@ report, which caught **4 wrong categories** in the first attempt.
 |---|---|---|
 | `query_understanding.py` | 154 | Question → structured intent, via constrained JSON. Also canonicalises the district itself, so a near-miss spelling never reaches SQL. |
 | `retrieval.py` | 134 | **Deterministic.** Maps intent to service calls. No model involved. |
-| `calculation.py` | 99 | **Deterministic.** Projects the water table forward at its measured rate. |
-| `grounding.py` | 155 | **Deterministic.** The blocking verification gate. |
+| `calculation.py` | 108 | **Deterministic.** Projects the water table forward at its measured rate, and states the year it lands on rather than leaving that as arithmetic. |
+| `grounding.py` | 257 | **Deterministic.** The blocking verification gate — six checks. |
 | `verification.py` | 51 | Model-based review. Advisory only. |
 | `response.py` | 71 | Writes the prose from verified data. |
-| `orchestrator.py` | 322 | Wires it together and decides what the user finally sees. |
+| `orchestrator.py` | 462 | Wires it together, decides what the user finally sees, and builds the chart and map payloads. |
 
 ### API — `backend/app/routers/`
 
@@ -109,12 +109,25 @@ report, which caught **4 wrong categories** in the first attempt.
 |---|---|---|
 | `App.jsx` | 68 | Shell, wordmark, live health indicator. |
 | `api.js` | 26 | `sendMessage` / `getHealth`. In dev, Vite proxies `/api` so the browser makes no cross-origin request. |
+| `categories.js` | 27 | The CGWB category colours, shared. The map and the bars often appear in one answer, and a district red on one and orange on the other reads as two findings. |
 | `components/ChatWindow.jsx` | 128 | State, submission, bottom-anchored message list, scroll pinning. |
 | `components/AquiferHero.jsx` | 246 | The landing page: an animated cross-section, counting stats, tagged prompt cards. Inline SVG only — no external assets, so it works offline. |
-| `components/MessageBubble.jsx` | 64 | One message: prose, source badge, citations, unverified warning. |
-| `components/TrendChart.jsx` | 85 | Depth over time, **Y axis reversed** so a falling line reads as a falling water table. |
-| `components/MapView.jsx` | 132 | Districts coloured by category, re-measured after layout settles. Names any district it cannot plot. |
-| `index.css` | 105 | Animations, all disabled under `prefers-reduced-motion`. |
+| `components/MessageBubble.jsx` | 69 | One message: prose, source badge, citations, unverified warning. Routes `chart_data` to bars or to the trend line by its `type`. |
+| `components/TrendChart.jsx` | 292 | Depth over time as a cross-section: ground filled above the water table, **Y axis reversed** so a falling line reads as a falling water table. Draws the projection dashed into a shaded future region, ending on a marked crossing of the reference depth. |
+| `components/RankChart.jsx` | 121 | Districts side by side, worst first, coloured by category, the answering district held at full opacity. Plain CSS grid — a grid lays out labelled horizontal bars better than a chart library. |
+| `components/MapView.jsx` | 126 | Districts coloured by category, re-measured after layout settles. Names any district it cannot plot. |
+| `index.css` | 125 | Animations, all disabled under `prefers-reduced-motion`. Nothing load-bearing is animated: bar widths and the projection's dash are correct in the markup whether or not the animation runs. |
+
+### Tests — `backend/tests/`
+
+Pure functions only: no model, no database, no network. Runs in about a second.
+
+| File | Lines | Covers |
+|---|---|---|
+| `test_grounding.py` | 202 | All six checks, including the two failures that shipped. |
+| `test_calculation.py` | 148 | The projection, its chart line, and which fields the model may see. |
+| `test_chart_payloads.py` | 145 | Which visual an intent earns, and the bar payloads. |
+| `test_districts.py` | 73 | Canonicalisation across CGWB's spellings. |
 
 ---
 
@@ -140,15 +153,32 @@ under a 3-year span are excluded. Result: 0.504 m/year from 75 stations,
 
 **5 — Verification, in two tiers.**
 
-*Deterministic (`grounding.py`), blocking:*
-- every parenthesised citation must name something in the retrieved data
-- every figure must match a value in the data, with rounding tolerance
-- every district named must be one the data covers, matched across spellings
-- a threshold the data marks as non-official must not be credited to CGWB
+*Deterministic (`grounding.py`), blocking — six checks:*
+
+1. every parenthesised citation must name something in the retrieved data
+2. every figure must match a value in the data, with rounding tolerance
+3. every district named must be one the data covers, matched across spellings
+4. a threshold the data marks as non-official must not be credited to CGWB
+5. a projected arrival year must be the year the data computed
+6. a figure written with a unit must match a value *of that unit*
+
+The last two exist because checks 1–4 passed answers that were wrong. Check 2
+exempts every integer from 1900 to 2100 as "a year", since citations carry them
+legitimately — so *"approximately 20 years (2034)"* went out verified when the
+projection gives 2044, on the one question where the year is the headline.
+Check 6 answers the mirror image: membership alone approved *"a reference depth
+of 20.1 metres"*, because 20.1 really is in the data — as the number of years.
+**Being in the data is not the same as measuring what the sentence says.**
 
 *Model-based (`verification.py`), advisory:* catches nuance rules cannot — a
 dropped caveat, a projection stated as fact. It gets one rewrite, not a veto,
 because it also objects to figures that are genuinely present.
+
+A rewrite that introduces a grounding failure the original did not have is
+discarded. Told to mention the pumping limit, one rewrite credited the 30 m
+figure to CGWB — and a first draft that grounded clean was being replaced by a
+data dump on the strength of a nitpick, which is exactly the veto the advisory
+reviewer is not meant to have.
 
 If grounding still fails after the rewrite, the answer is replaced by a plain
 data dump saying so. **An unverifiable answer is never shown as if it were
@@ -157,6 +187,11 @@ verified.**
 **6 — Assembly.** Citations, chart and map are built **from the data**, not from
 model flags — it left both flags false on questions that obviously wanted a
 visual, and left the citations array empty while writing citations inline.
+
+Which visual follows from the intent. One district over time gets the trend
+line, with the projection drawn on it when there is one. Several districts
+against each other get bars. A category listing gets only the map: every bar
+would be the same length and the same colour.
 
 ---
 
@@ -182,9 +217,9 @@ return a **validated Pydantic object**, so no agent ever parses free text.
 | Understanding the question | **yes** |
 | Choosing what data to fetch | no — a dict lookup |
 | Fetching it | no — SQL |
-| The projection maths | no — numpy |
+| The projection maths, and the year it lands on | no — numpy |
 | Writing the prose | **yes** |
-| Checking citations, figures, districts | no — plain Python |
+| Checking citations, figures, districts, years, units | no — plain Python |
 | Reviewing for nuance | **yes**, advisory |
 | Citations, chart, map | no — built from the data |
 
@@ -205,6 +240,12 @@ across three calls — about $0.02, so the full demo costs under ten cents.
 `slim_for_prompt()` strips bulk the model never cites individually — a 75-name
 station list becomes `[75 stations]`, which the `confidence_note` already
 summarises.
+
+It also withholds fields the checks read but the model must not see. Shown the
+projection's `projected_year`, a 7B model cited the field name as a source:
+*"around 2044 (projected_year: 2044, citation: projection.confidence_note)"*.
+The year is in `confidence_note` as prose, which is where an answer should get
+it from.
 
 ---
 
@@ -264,6 +305,20 @@ cd frontend && npm run dev
 
 Open **http://localhost:5173**. Interactive API docs are at `/docs`.
 
+`--reload` is unreliable on this machine: an edit to `llm_client.py` never
+triggered one, and the stale code was only caught because three answers came
+back byte-identical after a change that should have altered them. Restart the
+backend rather than trust it. It also watches `backend/tests/`, so writing a
+test bounces the server.
+
+**Tests**
+
+```bash
+cd backend && python -m pytest tests/
+```
+
+60 tests, about a second, no model or database needed.
+
 ---
 
 ## 7. Decisions worth defending
@@ -290,8 +345,18 @@ quality questions.
 removed the ambiguity.
 
 **Say what is missing.** Malerkotla has a CGWB category and no monitoring
-stations. It is named in the map footnote rather than dropped, and a question
-about its water level says so plainly.
+stations. It is named in the map footnote and in the bar chart's footer rather
+than dropped, and a question about its water level says so plainly.
+
+**Check the quantity, not just the value.** Every figure in a projection answer
+is somewhere in the data, so asking only *is this number present* approves the
+number of years written as a depth. Figures are collected by what they measure,
+and a number carrying a unit must match a value of that unit.
+
+**Nothing load-bearing is animated.** Bar widths and the projection's dash are
+correct in the markup whether or not the animation ever runs. An earlier version
+transitioned bar width up from zero and rendered an empty chart wherever the
+frames did not come.
 
 ---
 
@@ -310,3 +375,12 @@ about its water level says so plainly.
   do not.
 - **Malerkotla has no readings** — level, trend and projection are unavailable
   for it. Only its category exists.
+- **The model still cites field names.** Asked how fast Sangrur is falling, a
+  7B model answers `1.205 meters per year (depletion_rate). } (Sangrur,
+  depletion_rate)` — a stray brace, and a key used as a source. Check 1 misses
+  it because only capitalised tokens are treated as citations. The figure and
+  its unit are right; the citation is noise.
+- **Grounding cannot check what it was never given.** Checks 5 and 6 exist
+  because two wrong answers were *correctly grounded* in the data they had. The
+  same blind spot remains anywhere the retrieved data does not distinguish two
+  quantities the prose can confuse.
