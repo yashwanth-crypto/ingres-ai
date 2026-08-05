@@ -9,9 +9,21 @@ export default function ChatWindow() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const endRef = useRef(null);
+  const scrollerRef = useRef(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Setting scrollTop directly rather than scrollIntoView({behavior:"smooth"}):
+    // smooth scrolling is animation-driven and does nothing in a backgrounded
+    // tab, which would leave the newest answer below the fold.
+    const toEnd = () => {
+      const el = scrollerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    };
+    toEnd();
+    // Charts and map tiles lay out after this effect runs and grow the message,
+    // so re-pin once they have settled.
+    const again = [setTimeout(toEnd, 260), setTimeout(toEnd, 900)];
+    return () => again.forEach(clearTimeout);
   }, [messages, busy]);
 
   async function ask(text) {
@@ -47,11 +59,13 @@ export default function ChatWindow() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto scroll-smooth">
         {messages.length === 0 ? (
           <AquiferHero onPick={ask} disabled={busy} />
         ) : (
-          <div className="space-y-4 px-4 py-6 sm:px-6">
+          // Anchored to the bottom so a short conversation sits just above the
+          // input instead of stranding it at the top of an empty page.
+          <div className="flex min-h-full flex-col justify-end space-y-4 px-4 py-6 sm:px-6">
             {messages.map((m, i) => (
               <MessageBubble key={i} message={m} />
             ))}
