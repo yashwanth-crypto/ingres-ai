@@ -111,6 +111,27 @@ def _typed_numbers(node, out: dict[str, set[float]]) -> None:
             _typed_numbers(item, out)
 
 
+def _sentences(text: str) -> list[str]:
+    """Split on sentence ends and line breaks. Rough on purpose - it only has
+    to keep a district and a figure together or apart, not parse grammar."""
+    return [s.strip() for s in re.split(r"(?<=[.;:])\s+|\n+", text) if s.strip()]
+
+
+def _mentions_figure(sentence: str, figure: str) -> bool:
+    return re.search(rf"(?<![\d.]){re.escape(figure)}(?![\d])", sentence) is not None
+
+
+def _mentions_any(sentence: str, districts: list[str]) -> bool:
+    return any(
+        re.search(rf"\b{re.escape(d)}\b", sentence, re.IGNORECASE)
+        or any(
+            re.search(rf"\b{re.escape(v)}\b", sentence, re.IGNORECASE)
+            for v in variants_of(d)
+        )
+        for d in districts
+    )
+
+
 def _number_supported(value: float, known: set[float]) -> bool:
     for k in known:
         if abs(k - value) <= ABS_TOLERANCE:
@@ -246,6 +267,42 @@ def grounding_issues(draft: str, raw_data: dict) -> list[str]:
                         f"The draft states {raw} as {noun}, but no such value "
                         f"was retrieved - it may be a figure of a different "
                         f"kind restated with the wrong unit."
+                    )
+
+    # --- 7. A figure tied to a district must come from a sentence tying them ---
+    # Report-backed answers are the one place the other checks are weakest.
+    # Asked whether Bathinda's water is safe, the model wrote "In Bathinda,
+    # 13.9% of water samples have fluoride above 1.50 mg/L" from a passage
+    # whose own sentence reads "the remaining 13.9% have fluoride above 1.50
+    # mg/L" - a Punjab-wide figure. The passage does mention Bathinda
+    # elsewhere, so chunk-level scope cannot catch it; only the sentence can.
+    passages = raw_data.get("passages")
+    if passages:
+        source_sentences = [
+            s for p in passages for s in _sentences(p.get("text", ""))
+        ]
+        for sentence in _sentences(draft):
+            named = [
+                d
+                for d in CANONICAL_DISTRICTS
+                if re.search(rf"\b{re.escape(d)}\b", sentence, re.IGNORECASE)
+            ]
+            if not named:
+                continue
+            # Percentages only. A concentration or a threshold ("above 1.50
+            # mg/L") is usually a definition the report states once and applies
+            # everywhere, and requiring it to share a sentence with the
+            # district would reject correct answers.
+            for figure in re.findall(r"(?<![\d.])(\d+(?:\.\d+)?)\s*%", sentence):
+                if not any(
+                    _mentions_figure(source, figure) and _mentions_any(source, named)
+                    for source in source_sentences
+                ):
+                    issues.append(
+                        f"The draft ties {figure}% to "
+                        f"{' or '.join(named)}, but no passage states that "
+                        f"figure for that district - it may be a Punjab-wide "
+                        f"finding reported as a local one."
                     )
 
     # De-duplicate while preserving order.

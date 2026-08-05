@@ -144,6 +144,81 @@ def test_rounded_units_pass(projection_data):
     assert grounding_issues(draft, projection_data) == []
 
 
+# --------------------------------------------------------------------------
+# Check 7 - statewide figures reported as local
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fluoride_passages() -> dict:
+    """Printed page 58. The 13.9% is Punjab-wide; the page names Bathinda
+    elsewhere, which is why chunk-level scope cannot catch the confusion."""
+    return {
+        "intent": "document_question",
+        "district": "Bathinda",
+        "passages": [
+            {
+                "citation": "CGWB, Ground Water Resources of Punjab 2024, p. 58",
+                "page": 58,
+                "section": "Fluoride",
+                "districts": ["Bathinda", "Faridkot", "Mansa"],
+                "scope": "district",
+                "text": (
+                    "Classification of samples based on this recommendation, it "
+                    "is found that 55.6 % samples have fluoride in desirable "
+                    "range, 30.5 % in the permissible and the remaining 13.9 % "
+                    "have fluoride above 1.50 mg/L. High fluoride is found "
+                    "mainly in the south-west, including Bathinda and Mansa."
+                ),
+            }
+        ],
+    }
+
+
+def test_a_statewide_percentage_reported_as_a_districts_is_caught(fluoride_passages):
+    """The bug the handoff recorded, reproduced and now pinned."""
+    draft = (
+        "In Bathinda, 13.9% of water samples have fluoride concentrations above "
+        "1.50 mg/L (CGWB, Ground Water Resources of Punjab 2024, p. 58)."
+    )
+    assert only(grounding_issues(draft, fluoride_passages), "13.9%")
+
+
+def test_the_same_figure_reported_statewide_passes(fluoride_passages):
+    draft = (
+        "Across Punjab, 13.9% of samples have fluoride above 1.50 mg/L "
+        "(CGWB, Ground Water Resources of Punjab 2024, p. 58). The report gives "
+        "no separate figure for Bathinda."
+    )
+    assert grounding_issues(draft, fluoride_passages) == []
+
+
+def test_a_threshold_beside_a_district_is_not_a_misattribution(fluoride_passages):
+    """"above 1.50 mg/L" is a limit the report defines once and applies
+    everywhere. Only percentages are tied to place."""
+    draft = (
+        "Fluoride above 1.50 mg/L is injurious, and Bathinda lies in the "
+        "affected south-west (CGWB, Ground Water Resources of Punjab 2024, p. 58)."
+    )
+    assert grounding_issues(draft, fluoride_passages) == []
+
+
+def test_a_percentage_the_passage_does_tie_to_the_district_passes():
+    data = {
+        "intent": "document_question",
+        "passages": [
+            {
+                "citation": "CGWB, Ground Water Resources of Punjab 2024, p. 58",
+                "page": 58,
+                "districts": ["Bathinda"],
+                "scope": "district",
+                "text": "In Bathinda, 42.0 % of samples exceed the limit.",
+            }
+        ],
+    }
+    assert grounding_issues("In Bathinda, 42.0% of samples exceed the limit.", data) == []
+
+
 def test_report_answers_skip_the_unit_check():
     """Passages quote figures of every kind; there is no typed set to check
     them against, and flagging quotation would be a false positive."""
