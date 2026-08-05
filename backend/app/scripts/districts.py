@@ -11,6 +11,7 @@ later in the pipeline can be an exact match instead of a fuzzy one.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 # Punjab has 23 districts as of the 2021 creation of Malerkotla.
 CANONICAL_DISTRICTS: tuple[str, ...] = (
@@ -126,6 +127,30 @@ def variants_of(district: str) -> set[str]:
     that plainly discusses it.
     """
     return {v for v, canonical in _VARIANTS.items() if canonical == district}
+
+
+@lru_cache(maxsize=1)
+def _mention_pattern() -> re.Pattern[str]:
+    """One alternation over every spelling, longest first so "Tarn Taran" wins
+    over a shorter variant that prefixes it."""
+    spellings = sorted(_VARIANTS, key=len, reverse=True)
+    return re.compile(r"\b(?:" + "|".join(map(re.escape, spellings)) + r")\b", re.IGNORECASE)
+
+
+def districts_mentioned(text: str | None) -> list[str]:
+    """Canonical districts named in a piece of text, in order of appearance.
+
+    Used to resolve a question that points back at the conversation rather than
+    naming its subject - "which of those two is worse?".
+    """
+    if not text:
+        return []
+    seen: list[str] = []
+    for match in _mention_pattern().finditer(text):
+        canonical = _VARIANTS.get(_normalise(match.group(0)))
+        if canonical and canonical not in seen:
+            seen.append(canonical)
+    return seen
 
 
 def is_punjab(value: str | None) -> bool:
