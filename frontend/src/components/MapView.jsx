@@ -1,4 +1,47 @@
-import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
+import { useEffect } from "react";
+import {
+  CircleMarker,
+  MapContainer,
+  Popup,
+  TileLayer,
+  useMap,
+} from "react-leaflet";
+
+/**
+ * Leaflet measures its container once, at mount. Here the container is still
+ * settling at that moment - the message list grows as the answer renders and
+ * the view re-pins to the bottom - so the map computed its pixel origin from a
+ * wrong size and drew Punjab's tiles as though they were somewhere else
+ * entirely (Gujarat, in practice), with tiles spilling past the frame.
+ *
+ * Re-measuring after the layout settles fixes both, and fitting to the actual
+ * points frames the districts properly instead of trusting a fixed zoom.
+ */
+function FitToPoints({ points }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const bounds = points.map((p) => [p.latitude, p.longitude]);
+    const settle = () => {
+      map.invalidateSize();
+      if (bounds.length === 1) {
+        map.setView(bounds[0], 9);
+      } else if (bounds.length > 1) {
+        map.fitBounds(bounds, { padding: [28, 28] });
+      }
+    };
+    // Immediately, then after the message and its tiles have finished laying out.
+    settle();
+    const timers = [80, 350, 900].map((d) => setTimeout(settle, d));
+    window.addEventListener("resize", settle);
+    return () => {
+      timers.forEach(clearTimeout);
+      window.removeEventListener("resize", settle);
+    };
+  }, [map, points]);
+
+  return null;
+}
 
 // CGWB assessment categories, worst to best.
 const CATEGORY_COLOR = {
@@ -45,6 +88,7 @@ export default function MapView({ data }) {
         scrollWheelZoom={false}
         style={{ height: 320, width: "100%" }}
       >
+        <FitToPoints points={points} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

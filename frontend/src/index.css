@@ -1,8 +1,11 @@
+/* Leaflet's stylesheet is imported from main.jsx, not here: a CSS @import must
+   precede every other rule, so placing it after the @tailwind directives got it
+   silently dropped - which left tiles position:static and the map drawing
+   itself outside its own frame. */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import "leaflet/dist/leaflet.css";
 
 body {
   @apply bg-stone-50 text-slate-800 antialiased;
