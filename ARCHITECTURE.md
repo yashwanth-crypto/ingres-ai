@@ -32,6 +32,12 @@ CGWB's report, which is indexed for semantic search — but numeric questions
 never go there, because retrieving prose *about* a figure loses the station and
 the date that make it checkable.
 
+The document side is the weaker half, and its weakness is *place*: a finding
+about Punjab is one sentence away from a finding about a district. Every chunk
+therefore declares what it is about — chapter, section, the districts it names,
+and whether it is local or statewide — and retrieval, the prompt and check 7
+all use that.
+
 ---
 
 ## 2. Where the data came from
@@ -39,7 +45,7 @@ the date that make it checkable.
 | Source | What it gave | Rows |
 |---|---|---|
 | NWDP (`nwdp.nwic.gov.in`), CGWB *Manual Quarterly* export | Station-level water levels, 1996–2024 | 36,879 readings across 1,607 stations |
-| CGWB *Ground Water Resources of Punjab 2024* (PDF, 130pp) | Block categories, and the RAG corpus | 153 blocks, 254 text chunks |
+| CGWB *Ground Water Resources of Punjab 2024* (PDF, 130pp) | Block categories, and the RAG corpus | 153 blocks, 178 text chunks |
 
 Two dead ends worth knowing about, because they cost real time:
 
@@ -72,14 +78,14 @@ report, which caught **4 wrong categories** in the first attempt.
 | `scripts/districts.py` | 135 | Punjab's 23 canonical district names plus every spelling CGWB actually uses. `Ropar`→Rupnagar, `Firozpur`→Ferozepur, `Mukatsar`→Muktsar, `Mohali`/`SAS Nagar`→Sahibzada Ajit Singh Nagar. `variants_of()` exists because the report writes *Bhatinda*. |
 | `scripts/create_db.py` | 61 | Creates the database. Postgres has no `CREATE DATABASE IF NOT EXISTS`, and it cannot be created from a connection to itself. |
 | `scripts/ingest_data.py` | 776 | The loader. Resolves columns against known CGWB header spellings and **aborts printing the real headers** rather than guessing. Handles long and wide layouts, drops non-Punjab rows, sentinels (`-9999`), unparseable dates, and out-of-range levels — counting every drop by reason. Idempotent. |
-| `scripts/build_rag_index.py` | 143 | Chunks pages 9–114 of the report and embeds them locally. Annexures are excluded on purpose: those tables are already in Postgres as exact rows. |
+| `scripts/build_rag_index.py` | 308 | Chunks the report's narrative chapters — printed pages 1–78 — and embeds them locally. Every chunk records its chapter, section, the districts it names, and whether it is district-scoped or statewide. Annexures are excluded on purpose: those tables are already in Postgres as exact rows. |
 
 ### Services — the layer both the API and the agents call
 
 | File | Lines | Job |
 |---|---|---|
 | `services/groundwater_service.py` | 360 | All SQL. Current level, depletion rate, risk category, blocks, comparison, ranking, yearly series, map points, categories in bulk. No FastAPI imports, so agents call it directly instead of looping back over HTTP. |
-| `services/rag_service.py` | 91 | Semantic search over the report. Vectors are pre-normalised, so search is a dot product over a 762 KB matrix — no vector database. Passages below 0.55 similarity are discarded rather than answered from. |
+| `services/rag_service.py` | 145 | Semantic search over the report, then a deterministic rerank on what each chunk says it is about. Vectors are pre-normalised, so search is a dot product over a 534 KB matrix — no vector database. Passages below 0.55 similarity are discarded rather than answered from. |
 | `services/llm_client.py` | 233 | The model boundary. One interface, two backends. Handles structured output, refusals, and a retry when a small model runs out of tokens mid-JSON. `slim_for_prompt()` also withholds fields the checks read but the model must not see. |
 
 ### Agents — `backend/app/agents/`
@@ -87,11 +93,11 @@ report, which caught **4 wrong categories** in the first attempt.
 | File | Lines | Job |
 |---|---|---|
 | `query_understanding.py` | 154 | Question → structured intent, via constrained JSON. Also canonicalises the district itself, so a near-miss spelling never reaches SQL. |
-| `retrieval.py` | 134 | **Deterministic.** Maps intent to service calls. No model involved. |
+| `retrieval.py` | 142 | **Deterministic.** Maps intent to service calls, and passes the district to the reranker rather than only gluing it onto the query. No model involved. |
 | `calculation.py` | 108 | **Deterministic.** Projects the water table forward at its measured rate, and states the year it lands on rather than leaving that as arithmetic. |
-| `grounding.py` | 257 | **Deterministic.** The blocking verification gate — six checks. |
+| `grounding.py` | 314 | **Deterministic.** The blocking verification gate — seven checks. |
 | `verification.py` | 51 | Model-based review. Advisory only. |
-| `response.py` | 71 | Writes the prose from verified data. |
+| `response.py` | 72 | Writes the prose from verified data. |
 | `orchestrator.py` | 462 | Wires it together, decides what the user finally sees, and builds the chart and map payloads. |
 
 ### API — `backend/app/routers/`
@@ -124,10 +130,11 @@ Pure functions only: no model, no database, no network. Runs in about a second.
 
 | File | Lines | Covers |
 |---|---|---|
-| `test_grounding.py` | 202 | All six checks, including the two failures that shipped. |
+| `test_grounding.py` | 277 | All seven checks, including the three failures that shipped. |
 | `test_calculation.py` | 148 | The projection, its chart line, and which fields the model may see. |
 | `test_chart_payloads.py` | 145 | Which visual an intent earns, and the bar payloads. |
 | `test_districts.py` | 73 | Canonicalisation across CGWB's spellings. |
+| `test_rag.py` | 148 | Page offset, section map, chunk metadata, and the rerank. |
 
 ---
 
@@ -153,7 +160,7 @@ under a 3-year span are excluded. Result: 0.504 m/year from 75 stations,
 
 **5 — Verification, in two tiers.**
 
-*Deterministic (`grounding.py`), blocking — six checks:*
+*Deterministic (`grounding.py`), blocking — seven checks:*
 
 1. every parenthesised citation must name something in the retrieved data
 2. every figure must match a value in the data, with rounding tolerance
@@ -161,14 +168,25 @@ under a 3-year span are excluded. Result: 0.504 m/year from 75 stations,
 4. a threshold the data marks as non-official must not be credited to CGWB
 5. a projected arrival year must be the year the data computed
 6. a figure written with a unit must match a value *of that unit*
+7. a percentage tied to a district must come from a passage sentence tying them
 
-The last two exist because checks 1–4 passed answers that were wrong. Check 2
-exempts every integer from 1900 to 2100 as "a year", since citations carry them
-legitimately — so *"approximately 20 years (2034)"* went out verified when the
-projection gives 2044, on the one question where the year is the headline.
-Check 6 answers the mirror image: membership alone approved *"a reference depth
-of 20.1 metres"*, because 20.1 really is in the data — as the number of years.
-**Being in the data is not the same as measuring what the sentence says.**
+The last three exist because the ones before them passed answers that were
+wrong. Check 2 exempts every integer from 1900 to 2100 as "a year", since
+citations carry them legitimately — so *"approximately 20 years (2034)"* went
+out verified when the projection gives 2044, on the one question where the year
+is the headline. Check 6 answers the mirror image: membership alone approved *"a
+reference depth of 20.1 metres"*, because 20.1 really is in the data — as the
+number of years. **Being in the data is not the same as measuring what the
+sentence says.**
+
+Check 7 covers report-backed answers, where the others are weakest. Asked
+whether Bathinda's water is safe, the model wrote *"In Bathinda, 13.9% of water
+samples have fluoride above 1.50 mg/L"* from a passage whose own sentence reads
+*"the remaining 13.9% have fluoride above 1.50 mg/L"* — a Punjab-wide figure.
+The page does name Bathinda elsewhere, so no amount of chunk-level scoping
+catches it; only the sentence does. Percentages only: a threshold like *1.50
+mg/L* is a limit the report defines once and applies everywhere, and demanding
+it share a sentence with the district would reject correct answers.
 
 *Model-based (`verification.py`), advisory:* catches nuance rules cannot — a
 dropped caveat, a projection stated as fact. It gets one rewrite, not a veto,
@@ -293,6 +311,14 @@ duplicates.
 The RAG index is committed, so `build_rag_index.py` is only needed to rebuild it
 (and only then does the 7 MB PDF matter).
 
+```bash
+python -m app.scripts.build_rag_index --dry-run
+```
+
+`--dry-run` chunks and reports without embedding or writing, which is the fast
+way to see what a change to the chunking does. The index is cached in-process,
+so a rebuild needs a backend restart to take effect.
+
 **Run it**
 
 ```bash
@@ -317,7 +343,7 @@ test bounces the server.
 cd backend && python -m pytest tests/
 ```
 
-60 tests, about a second, no model or database needed.
+86 tests, about a second, no model or database needed.
 
 ---
 
@@ -362,11 +388,16 @@ frames did not come.
 
 ## 8. Known limitations
 
-- **Document answers are less verifiable than database answers.** Grounding
-  confirms a cited page and figure appear in the retrieved passages, but cannot
-  catch a subtler misreading — a Punjab-wide salinity statistic was once
-  attributed to Bathinda specifically. This is inherent to RAG, and is why
-  numeric questions stay on the structured path.
+- **Document answers are still the weaker half.** Check 7 stops a statewide
+  percentage being *stated* as a district's, and the answer now reads "13.9% of
+  samples across Punjab" rather than "in Bathinda, 13.9%". It cannot stop a
+  reader drawing the same inference from two adjacent sentences, and it covers
+  percentages only. Numeric questions stay on the structured path for this
+  reason.
+- **Scope is chunk-level, attribution is sentence-level.** A page that reports a
+  Punjab-wide figure and names a district lower down is one chunk, marked
+  district-scoped. The metadata cannot express that split; only check 7 sees it.
+  Sentence-level scoping would be the real fix.
 - **"Why is groundwater falling in Punjab?"** is rejected by grounding and falls
   back to a data dump. Honest, but avoid it in a demo.
 - **A persona injection wrapped around a real question** is refused outright.

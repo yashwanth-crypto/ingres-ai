@@ -351,12 +351,18 @@ over the retrieved data first. It cannot hallucinate, and it catches:
 - a non-CGWB threshold attributed to CGWB
 - a projected arrival year that is not the year the data computed
 - a figure written with a unit that matches no value *of that unit*
+- a percentage tied to a district with no passage sentence tying them
 
-The last two were added after the first four passed answers that were wrong.
+The last three were added after the earlier ones passed answers that were wrong.
 Checking membership alone let *"approximately 20 years (2034)"* through when the
 projection gives 2044, and *"a reference depth of 20.1 metres"* through because
 20.1 really is in the data — as the number of years. **Being in the data is not
 the same as measuring what the sentence says it measures.**
+
+The last covers report answers: *"In Bathinda, 13.9% of samples have fluoride
+above 1.50 mg/L"* came from a sentence reading *"the remaining 13.9% have
+fluoride above 1.50 mg/L"* — a Punjab-wide figure on a page that names Bathinda
+further down. Chunk-level scope cannot see that; the sentence can.
 
 These are the **blocking** gate. The LLM reviewer is **advisory** — it catches
 nuance the rules cannot (a dropped caveat, a projection stated as fact) but
@@ -366,8 +372,8 @@ did not have is discarded, so an advisory objection can never turn a clean
 answer into a data dump. If grounding still fails after the rewrite, the answer
 is replaced by a plain data dump saying so.
 
-All six checks are covered by tests, including both failures above, so neither
-can come back:
+All seven checks are covered by tests, including the three failures above, so
+none of them can come back:
 
 ```bash
 cd backend && python -m pytest tests/
@@ -392,16 +398,28 @@ to check it. The report is indexed for what the database genuinely lacks.
 
 ### The index
 
-254 chunks from pages 9–114 of *Ground Water Resources of Punjab 2024*,
-embedded with `nomic-embed-text` locally. Annexures I–V are deliberately
-**excluded** — those tables are already in Postgres as exact rows.
+178 chunks from the narrative chapters of *Ground Water Resources of Punjab
+2024* — the report's own printed pages 1–78 — embedded with `nomic-embed-text`
+locally. Annexures I–V are deliberately **excluded**, since those tables are
+already in Postgres as exact rows, and so are the appendices and plates: they
+are government notifications, meeting minutes and chart axis labels.
 
-At 254 chunks, search is a dot product over a 762 KB normalised matrix. No
-vector database, no pgvector, no extra service. The index is committed, so the
-pipeline runs without the 7 MB PDF.
+Each chunk records its **chapter**, its **section**, the **districts it names**,
+and whether it is **district-scoped or statewide**. Retrieval takes the top
+candidates by similarity and then reranks on that metadata, so a passage about
+Amritsar does not answer a question about Bathinda merely because the two read
+alike.
+
+Citations quote the report's **printed** page number, not the PDF's index. The
+two differ by nine, and quoting the wrong one put a fluoride passage on the Iron
+section's page.
+
+At this size, search is a dot product over a 534 KB normalised matrix. No vector
+database, no pgvector, no extra service. The index is committed, so the pipeline
+runs without the 7 MB PDF.
 
 ```bash
-python -m app.scripts.build_rag_index      # only needed to rebuild
+python -m app.scripts.build_rag_index --dry-run   # chunk and report only
 ```
 
 Passages below 0.55 cosine similarity are discarded rather than answered from.

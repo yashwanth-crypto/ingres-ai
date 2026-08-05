@@ -8,9 +8,10 @@ file is only about what is *weak* and what to do about it.
 Phases 1–6 of the spec are done. Data loaded, six tool endpoints, five agents,
 hybrid retrieval, React frontend. 10 of 11 test questions answer cleanly.
 
-Branch `feat/answer-visuals`, six commits ahead of `main`, **no remote**. The
-work on it: the projection is drawn, ranked and compared answers get charts,
-two verification holes are closed, and there is a test suite.
+Branch `feat/answer-visuals`, ahead of `main`, **no remote**. The work on it:
+the projection is drawn, ranked and compared answers get charts, three
+verification holes are closed, the RAG index is rebuilt with real metadata and
+correct page citations, and there is a test suite.
 
 That is a working system. It is not yet a *good* one, for the reasons below.
 
@@ -62,24 +63,34 @@ turns, but nobody has tested whether *"and what about Moga?"* or *"is that
 getting worse?"* actually resolves. It may well not. A judge will try it —
 conversation is the entire premise of a chat interface.
 
-### 4. The RAG corpus is one document
+### 4. The RAG corpus is still one document
 
-254 chunks from one 106-page report, and each chunk carries only `{page, text}`
-— no section title, no district, no scope marker. That thin metadata is why a
-Punjab-wide salinity figure was once attributed to Bathinda: the model received
-a passage with nothing saying what it was scoped to.
+Metadata, reranking and citations are done — see below for what changed. What
+is left is breadth: it is one report, and any question outside it has no source.
+Adding CGWB's annual Year Book, the Punjab Water Regulation Act, or state policy
+would widen coverage, and the groundwork for doing that safely now exists.
 
-"Too small" points at the wrong lever. In order:
+Two things to know before expanding:
 
-1. **Section-aware chunking and real metadata.** Attacks the known
-   misattribution directly, and is the cheapest of the three.
-2. **A reranking pass.** At k=3 against a flat 0.55 floor, first-stage
-   precision is doing all the work.
-3. **Then** more documents. Expanding the corpus before 1 and 2 scales the
-   failure mode rather than the coverage.
+- **The chunker is a fixed 900-character window per page.** A table spanning a
+  page break is still sliced mid-row. Table-shaped chunks are dropped rather
+  than parsed, which is honest but loses their content entirely.
+- **Scope is chunk-level; attribution is sentence-level.** A page carrying a
+  Punjab-wide figure and naming a district lower down is one chunk, marked
+  district-scoped. Check 7 catches the resulting misattribution at output; the
+  metadata cannot express the split. Sentence-level scoping is the real fix and
+  matters more as the corpus grows.
 
-Also worth knowing: the chunker is a fixed 900-character window per page, so a
-table spanning a page break is sliced mid-row.
+**What was done.** The index was rebuilt from printed pages 1–78 rather than PDF
+9–114: the old range included twelve pages of government notifications and
+fourteen of plates and figures, so a quarter of the corpus was chart axis labels
+competing for retrieval. 254 chunks became 178, with 34 table chunks dropped.
+Every chunk now carries its chapter, section, the districts it names, and
+whether it is district-scoped or statewide, and search reranks on that.
+
+And the citations were simply wrong. The report's printed page runs nine behind
+the PDF's, and chunks cited the PDF index — so a fluoride passage was cited as
+page 67, which is the **Iron** section. Plausible-looking, wrong contaminant.
 
 ### 5. The interface is still plain in places
 
@@ -119,7 +130,11 @@ firewall.
   The bar chart is plain CSS partly for this reason.
 - **A persona injection wrapped around a real question** is refused entirely,
   losing the legitimate question. Fails safe, but is over-strict.
-- **Document answers can misattribute** — see problem 4.
+- **Document answers can still misattribute by juxtaposition.** Check 7 stops a
+  statewide percentage being stated as a district's, so the answer now reads
+  "13.9% of samples across Punjab" instead of "in Bathinda, 13.9%". It cannot
+  stop a reader drawing the same conclusion from two adjacent sentences, and it
+  covers percentages only.
 - **Tests cover the deterministic core only.** Nothing exercises the SQL layer,
   the ingestion cleaning rules, or an end-to-end `/chat` call. The ingestion
   rules in particular are pure functions and would be easy to add.
@@ -135,7 +150,8 @@ firewall.
 3. **Test the follow-up path**, then fix it. Cheap, and table stakes for a chat
    product.
 4. **Style the message bubble and citations.** The last plain surface.
-5. **RAG metadata and reranking**, before any corpus expansion.
+5. **More documents in the corpus** — the Year Book and state policy. Metadata
+   and reranking are in place, so expansion no longer scales the failure mode.
 6. Deploy, if time remains.
 
 ---
@@ -155,11 +171,17 @@ in the data they were given. The fault was upstream, in what got retrieved. No
 amount of output verification catches a well-grounded answer to the wrong
 question.
 
-**Being in the data is not the same as measuring the right thing.** The two
-checks added since — the projected year, and units — both exist because a wrong
-figure passed a check that only asked whether the number appeared *somewhere*.
-In a projection answer every number does. `20.1` is real; it is the number of
-years, and the sentence called it a depth.
+**Being in the data is not the same as measuring the right thing.** Three of the
+seven checks exist because a wrong figure passed one that only asked whether the
+number appeared *somewhere*. In a projection answer every number does. `20.1` is
+real; it is the number of years, and the sentence called it a depth. `13.9%` is
+real; it is Punjab's, and the sentence gave it to Bathinda.
+
+**Metadata describes a chunk; misattribution happens in a sentence.** Tagging
+every chunk with its districts and scope was the right move and did not, on its
+own, fix the bug it was aimed at — the offending page genuinely names Bathinda,
+just not in the sentence carrying the figure. Structure helps retrieval; only a
+check at the same granularity as the error catches the error.
 
 **An advisory reviewer must not be able to veto.** A first draft that grounded
 clean was being rewritten on a nuance objection, and when the rewrite introduced
