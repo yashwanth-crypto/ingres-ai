@@ -13,7 +13,7 @@ the projection is drawn, ranked and compared answers get charts, three
 verification holes are closed, the RAG index is rebuilt with real metadata and
 correct page citations, follow-ups are tested and one broken shape fixed, every
 answer says what it was checked against, the pipeline reports each step as it
-runs, and there is a 127-test suite.
+runs, and there is a 133-test suite.
 
 That is a working system. It is not yet a *good* one, for the reasons below.
 
@@ -152,7 +152,7 @@ firewall.
   "13.9% of samples across Punjab" instead of "in Bathinda, 13.9%". It cannot
   stop a reader drawing the same conclusion from two adjacent sentences, and it
   covers percentages only.
-- **Tests cover the deterministic core only.** 127 of them, but nothing
+- **Tests cover the deterministic core only.** 133 of them, but nothing
   exercises the SQL layer, the ingestion cleaning rules, or an end-to-end
   `/chat` call. The ingestion rules in particular are pure functions and would
   be easy to add.
@@ -190,11 +190,12 @@ in the data they were given. The fault was upstream, in what got retrieved. No
 amount of output verification catches a well-grounded answer to the wrong
 question.
 
-**Being in the data is not the same as measuring the right thing.** Three of the
-seven checks exist because a wrong figure passed one that only asked whether the
-number appeared *somewhere*. In a projection answer every number does. `20.1` is
-real; it is the number of years, and the sentence called it a depth. `13.9%` is
-real; it is Punjab's, and the sentence gave it to Bathinda.
+**Being in the data is not the same as measuring the right thing.** Four of the
+eight checks exist because a wrong figure passed one that only asked whether the
+number appeared *somewhere*. `20.1` is real; it is the number of years, and the
+sentence called it a depth. `13.9%` is real; it is Punjab's, and the sentence
+gave it to Bathinda. `3` is real; it counts the districts compared, and the
+sentence called them all of Punjab.
 
 **Measure the thing, not your instrument.** Two scares while building the
 progress stream turned out to be the measuring apparatus. The first stage

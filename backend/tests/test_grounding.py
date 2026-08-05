@@ -268,6 +268,73 @@ def test_reference_depth_credited_to_cgwb_is_caught(projection_data):
     assert only(grounding_issues(draft, projection_data), "reference depth to")
 
 
+def test_two_names_in_one_parenthetical_are_read_separately():
+    """"(Ludhiana and Sangrur)" was one token, matched nothing, and was
+    reported as an invented source - naming two districts both in the data."""
+    data = {
+        "comparison": {
+            "districts": [
+                {"district": "Ludhiana", "value_m": 18.15, "date": "2024-01-01"},
+                {"district": "Sangrur", "value_m": 40.1, "date": "2024-01-01"},
+            ]
+        },
+        "districts": ["Ludhiana", "Sangrur"],
+    }
+    assert grounding_issues("Both are over-exploited (Ludhiana and Sangrur).", data) == []
+
+
+def test_an_invented_name_beside_a_real_one_is_still_caught():
+    data = {
+        "comparison": {"districts": [{"district": "Ludhiana", "value_m": 18.15, "date": "2024-01-01"}]},
+        "districts": ["Ludhiana"],
+    }
+    assert only(grounding_issues("Deep levels (Ludhiana and Amritsar).", data), "Amritsar")
+
+
+# --------------------------------------------------------------------------
+# Check 8 - a statewide denominator
+# --------------------------------------------------------------------------
+
+
+COMPARISON = {
+    "comparison": {
+        "districts": [
+            {"district": "Ludhiana", "value_m": 18.15, "date": "2024-01-01"},
+            {"district": "Sangrur", "value_m": 40.1, "date": "2024-01-01"},
+        ]
+    },
+    "districts": ["Ludhiana", "Sangrur"],
+    "districts_compared": 3,
+    "districts_with_readings": 2,
+}
+
+
+def test_a_comparison_described_as_the_whole_state_is_caught():
+    """The failure seen in the interface. Both figures are real - counts of
+    what was compared - so no check on values can see it. Punjab has 23."""
+    draft = "2 of Punjab's 3 assessed districts have water tables deeper than 18 metres."
+    assert only(grounding_issues(draft, COMPARISON), "districts of Punjab")
+
+
+def test_the_real_statewide_count_passes():
+    data = {
+        "category_listing": [
+            {"district": "Ludhiana", "category": "over-exploited", "assessment_year": 2024}
+        ],
+        "category": "over-exploited",
+        "category_totals": {"districts_assessed": 23, "by_category": {"over-exploited": 20}},
+    }
+    draft = "20 of Punjab's 23 assessed districts are over-exploited."
+    assert [i for i in grounding_issues(draft, data) if "districts of Punjab" in i] == []
+
+
+def test_counting_the_districts_compared_is_allowed():
+    """A count of what was retrieved is a fact about the data, as long as it
+    is not dressed up as a count of the state."""
+    draft = "2 of the 3 districts compared have readings: 18.15 m and 40.1 m."
+    assert grounding_issues(draft, COMPARISON) == []
+
+
 def test_prose_parenthetical_is_not_read_as_a_citation(projection_data):
     """"(as projected by the median trend)" is prose, not an invented source."""
     draft = (

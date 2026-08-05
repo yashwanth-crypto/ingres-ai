@@ -9,7 +9,7 @@ calculation → verification → response.
 36,879 readings 1996–2024, 23 risk categories, 153 assessment blocks), six tool
 endpoints live, the agent pipeline answering every demo question, hybrid
 retrieval over the CGWB report, and a React frontend that draws the answer and
-reports each step of the pipeline as it runs. 127 tests over the deterministic
+reports each step of the pipeline as it runs. 133 tests over the deterministic
 core. [HANDOFF.md](HANDOFF.md) has what is still weak.
 
 ---
@@ -370,6 +370,7 @@ over the retrieved data first. It cannot hallucinate, and it catches:
 - a projected arrival year that is not the year the data computed
 - a figure written with a unit that matches no value *of that unit*
 - a percentage tied to a district with no passage sentence tying them
+- a count of Punjab's districts that is not Punjab's real one
 
 The last three were added after the earlier ones passed answers that were wrong.
 Checking membership alone let *"approximately 20 years (2034)"* through when the
@@ -390,14 +391,14 @@ did not have is discarded, so an advisory objection can never turn a clean
 answer into a data dump. If grounding still fails after the rewrite, the answer
 is replaced by a plain data dump saying so.
 
-All seven checks are covered by tests, including the three failures above, so
+All eight checks are covered by tests, including the four failures above, so
 none of them can come back:
 
 ```bash
 cd backend && python -m pytest tests/
 ```
 
-127 tests over the pieces that need no model, database or network.
+133 tests over the pieces that need no model, database or network.
 
 Every answer then **says what it was checked against** — the interface used to
 mention verification only when it failed, so an answer that passed all seven

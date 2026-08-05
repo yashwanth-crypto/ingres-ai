@@ -95,7 +95,7 @@ report, which caught **4 wrong categories** in the first attempt.
 | `query_understanding.py` | 206 | Question → structured intent, via constrained JSON. Canonicalises the district itself, so a near-miss spelling never reaches SQL, and resolves a follow-up that points back at the conversation rather than naming its subject. |
 | `retrieval.py` | 142 | **Deterministic.** Maps intent to service calls, and passes the district to the reranker rather than only gluing it onto the query. No model involved. |
 | `calculation.py` | 108 | **Deterministic.** Projects the water table forward at its measured rate, and states the year it lands on rather than leaving that as arithmetic. |
-| `grounding.py` | 324 | **Deterministic.** The blocking verification gate — seven checks. |
+| `grounding.py` | 344 | **Deterministic.** The blocking verification gate — eight checks. |
 | `verification.py` | 51 | Model-based review. Advisory only. |
 | `response.py` | 73 | Writes the prose from verified data. |
 | `orchestrator.py` | 693 | Wires it together, decides what the user finally sees, names the source of every derived figure, and builds the chart and map payloads. `run_chat()` yields a progress event per step; `handle_chat()` consumes it and returns the last one, so the two endpoints cannot diverge. |
@@ -119,7 +119,7 @@ report, which caught **4 wrong categories** in the first attempt.
 | `components/ChatWindow.jsx` | 122 | State, submission, bottom-anchored message list, scroll pinning — including as the progress list grows. |
 | `components/PipelineProgress.jsx` | 126 | What the pipeline is doing, while it does it. `foldStage()` collapses each announcement into its result, so nine events read as four lines. |
 | `components/AquiferHero.jsx` | 246 | The landing page: an animated cross-section, counting stats, tagged prompt cards. Inline SVG only — no external assets, so it works offline. |
-| `components/MessageBubble.jsx` | 154 | One message. The footer states that every figure was checked, which source answered, and what backed it — an answer that passes seven checks should not look like one from any chatbot. Routes `chart_data` to bars or to the trend line by its `type`. |
+| `components/MessageBubble.jsx` | 154 | One message. The footer states that every figure was checked, which source answered, and what backed it — an answer that passes eight checks should not look like one from any chatbot. Routes `chart_data` to bars or to the trend line by its `type`. |
 | `components/TrendChart.jsx` | 292 | Depth over time as a cross-section: ground filled above the water table, **Y axis reversed** so a falling line reads as a falling water table. Draws the projection dashed into a shaded future region, ending on a marked crossing of the reference depth. |
 | `components/RankChart.jsx` | 121 | Districts side by side, worst first, coloured by category, the answering district held at full opacity. Plain CSS grid — a grid lays out labelled horizontal bars better than a chart library. |
 | `components/MapView.jsx` | 126 | Districts coloured by category, re-measured after layout settles. Names any district it cannot plot. |
@@ -131,7 +131,7 @@ Pure functions only: no model, no database, no network. Runs in about a second.
 
 | File | Lines | Covers |
 |---|---|---|
-| `test_grounding.py` | 277 | All seven checks, including the three failures that shipped. |
+| `test_grounding.py` | 344 | All eight checks, including the four failures that shipped. |
 | `test_streaming.py` | 184 | The event sequence, and that the stream ends with what `/chat` returns. |
 | `test_sources.py` | 184 | Naming a derived figure's source, deduplicating citations, and the garbled-draft fallback. |
 | `test_calculation.py` | 148 | The projection, its chart line, and which fields the model may see. |
@@ -193,7 +193,7 @@ under a 3-year span are excluded. Result: 0.504 m/year from 75 stations,
 
 **5 — Verification, in two tiers.**
 
-*Deterministic (`grounding.py`), blocking — seven checks:*
+*Deterministic (`grounding.py`), blocking — eight checks:*
 
 1. every parenthesised citation must name something in the retrieved data
 2. every figure must match a value in the data, with rounding tolerance
@@ -202,6 +202,7 @@ under a 3-year span are excluded. Result: 0.504 m/year from 75 stations,
 5. a projected arrival year must be the year the data computed
 6. a figure written with a unit must match a value *of that unit*
 7. a percentage tied to a district must come from a passage sentence tying them
+8. a count of Punjab's districts must be Punjab's real one
 
 The last three exist because the ones before them passed answers that were
 wrong. Check 2 exempts every integer from 1900 to 2100 as "a year", since
@@ -211,6 +212,12 @@ is the headline. Check 6 answers the mirror image: membership alone approved *"a
 reference depth of 20.1 metres"*, because 20.1 really is in the data — as the
 number of years. **Being in the data is not the same as measuring what the
 sentence says.**
+
+Check 8 came from the interface: shown a three-district comparison, the model
+wrote *"2 of Punjab's 3 assessed districts"*. Punjab has 23. Both figures are
+real — they count what was compared — so no check on values can see it; the
+number is right and the claim it is attached to is false. Only the denominator
+gives it away.
 
 Check 7 covers report-backed answers, where the others are weakest. Asked
 whether Bathinda's water is safe, the model wrote *"In Bathinda, 13.9% of water
@@ -402,7 +409,7 @@ test bounces the server.
 cd backend && python -m pytest tests/
 ```
 
-127 tests, about a second, no model or database needed.
+133 tests, about a second, no model or database needed.
 
 ---
 

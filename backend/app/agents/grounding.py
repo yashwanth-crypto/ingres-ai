@@ -154,7 +154,11 @@ def grounding_issues(draft: str, raw_data: dict) -> list[str]:
 
     # --- 1. Citations in parentheses must name something in the data ---
     for inner in re.findall(r"\(([^)]{2,120})\)", draft):
-        for token in re.split(r"[,;]", inner):
+        # "and" separates names as surely as a comma does. Without it,
+        # "(Ludhiana and Sangrur)" was one token, matched nothing, and was
+        # reported as an invented source - naming two districts that are both
+        # right there in the data.
+        for token in re.split(r"[,;]|\band\b", inner):
             # "CGWB 2024" and "CGWB, 2024" are the same source; drop the year
             # before deciding whether the name is one we recognise.
             token = re.sub(r"\b(19|20)\d{2}\b", "", token).strip(" .,;-")
@@ -314,6 +318,22 @@ def grounding_issues(draft: str, raw_data: dict) -> list[str]:
                     f"be Punjab-wide findings reported as local ones. State them "
                     f"as Punjab-wide, or leave them out."
                 )
+
+    # --- 8. A statewide denominator must be Punjab's real one ---
+    # "2 of Punjab's 3 assessed districts have water tables deeper than 18
+    # metres" - said of a three-district comparison. Punjab has 23. Both
+    # figures are in the data, as counts of what was compared, so no check on
+    # values can see this: the number is right and the claim it is attached to
+    # is false. Only the denominator gives it away.
+    for raw in re.findall(
+        r"Punjab'?s?\s+(\d+)\s+(?:\w+\s+){0,2}districts", prose, re.IGNORECASE
+    ):
+        if int(raw) != len(CANONICAL_DISTRICTS):
+            issues.append(
+                f"The draft says {raw} districts of Punjab, but Punjab has "
+                f"{len(CANONICAL_DISTRICTS)}. A count of the districts this "
+                f"answer covers must not be written as a count of the state."
+            )
 
     # De-duplicate while preserving order.
     seen, unique = set(), []

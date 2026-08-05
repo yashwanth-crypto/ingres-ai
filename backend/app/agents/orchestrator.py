@@ -358,6 +358,18 @@ def _name_the_sources(raw_data: dict) -> None:
             f"{rate['district']}, last {rate['years_analyzed']} years"
         )
 
+    # How many districts were compared, and how many of them had readings.
+    # Both are facts about the retrieved data and an answer may reasonably
+    # quote either - "2 of the 3 districts compared" - but neither existed as a
+    # number anywhere, so check 2 called them invented.
+    comparison = raw_data.get("comparison")
+    if comparison and "districts_compared" not in raw_data:
+        rows = comparison.get("districts", [])
+        raw_data["districts_compared"] = len(rows)
+        raw_data["districts_with_readings"] = sum(
+            1 for r in rows if r.get("value_m") is not None
+        )
+
     projection = raw_data.get("projection")
     if projection and projection.get("stations_used") and not projection.get("source"):
         district = raw_data.get("district") or ""

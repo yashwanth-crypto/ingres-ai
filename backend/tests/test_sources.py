@@ -73,6 +73,23 @@ def test_quoting_the_field_name_does_not_ground(trend_data):
     assert "depletion_rate" not in trend_data["depletion_rate"]["source"]
 
 
+def test_a_comparison_counts_what_it_covered():
+    """Both counts are facts about the retrieved data and an answer may quote
+    either, but neither existed as a number, so check 2 called them invented."""
+    data = {
+        "comparison": {
+            "districts": [
+                {"district": "Ludhiana", "value_m": 18.15},
+                {"district": "Sangrur", "value_m": 40.1},
+                {"district": "Malerkotla", "value_m": None},
+            ]
+        }
+    }
+    _name_the_sources(data)
+    assert data["districts_compared"] == 3
+    assert data["districts_with_readings"] == 2
+
+
 def test_a_projection_is_given_a_source():
     data = {
         "district": "Ludhiana",
