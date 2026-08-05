@@ -56,7 +56,15 @@ def retrieval_agent(db: Session, intent: QueryIntent) -> dict:
             # Three passages, not four: a 7B model given four long extracts
             # rambled past its output budget and had to be retried, which
             # doubled latency. Three is enough to answer and stay fast.
-            passages = rag_service.search(query.strip(), k=3)
+            #
+            # The district is also passed separately, not only glued onto the
+            # query. Embedding similarity treats it as one more word; the
+            # reranker uses it to demote a passage that is scoped to some other
+            # district, which is how a figure ends up attributed to the wrong
+            # place.
+            passages = rag_service.search(
+                query.strip(), k=3, district=intent.district
+            )
             data["passages"] = passages
             if not passages:
                 data["unavailable"] = (
