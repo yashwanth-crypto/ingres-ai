@@ -12,6 +12,10 @@ numpy==2.4.2
 anthropic==0.120.2
 httpx==0.28.1
 
+# Tests. Pure Python, so it is not exposed to the Application Control policy
+# described below. Run from backend/ with: python -m pytest tests/
+pytest==9.1.1
+
 # Deliberately absent:
 #   pandas - ingest_data.py is stdlib-csv only. This machine's Application
 #            Control policy blocks pandas' unsigned compiled extensions
