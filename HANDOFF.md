@@ -12,7 +12,8 @@ Branch `feat/answer-visuals`, ahead of `main`, **no remote**. The work on it:
 the projection is drawn, ranked and compared answers get charts, three
 verification holes are closed, the RAG index is rebuilt with real metadata and
 correct page citations, follow-ups are tested and one broken shape fixed, every
-answer now says what it was checked against, and there is a 114-test suite.
+answer says what it was checked against, the pipeline reports each step as it
+runs, and there is a 127-test suite.
 
 That is a working system. It is not yet a *good* one, for the reasons below.
 
@@ -20,26 +21,22 @@ That is a working system. It is not yet a *good* one, for the reasons below.
 
 ## The honest problems, worst first
 
-### 1. It feels slow and dead while thinking
+### 1. Only one person can ask at a time
 
-3–15 seconds of a bouncing-dot indicator with nothing else happening. Nothing
-about the pipeline requires that silence — the answer is generated token by
-token and simply is not shown until complete.
+Nothing queues requests in front of Ollama, and two at once degrade far worse
+than linearly. A question that answers in 13 seconds on its own took **183**
+with a second request in flight — 78 of those seconds on intent extraction
+alone. There is no timeout either, so the second asker simply waits.
 
-**This is the single biggest perceived-quality gap.** Streaming the response
-would make the same 15 seconds feel responsive instead of broken. Ollama and the
-Claude API both stream; `/chat` returns one JSON blob.
+That is survivable for a demo one person drives, and not survivable if two
+judges type at the same time. The cheap fix is a lock and a queued-position
+message; the honest one is to say the machine runs one model.
 
-The obstacle is real, though: verification runs *after* generation, so streaming
-an unverified draft risks showing a figure that the grounding checks then
-reject. Two workable shapes:
-
-- Stream the draft into a "checking…" state, then either confirm it in place or
-  visibly replace it when grounding fails. Honest, and shows the verification
-  working, which is the whole pitch.
-- Stream only the retrieval and verification *stages* as status text ("found 27
-  stations… checking 3 figures…") and keep the answer atomic. Less impressive,
-  much simpler.
+**Streaming is done.** `/chat/stream` reports each step as it reaches it —
+first event about 7 ms after asking, against 3–15 seconds of bouncing dots
+before. The draft is deliberately not streamed token by token: it would mean
+showing figures the checks may be about to reject, and this model intermittently
+rambles to 21,000 characters before failing.
 
 ### 2. The prose is stilted
 
@@ -155,7 +152,7 @@ firewall.
   "13.9% of samples across Punjab" instead of "in Bathinda, 13.9%". It cannot
   stop a reader drawing the same conclusion from two adjacent sentences, and it
   covers percentages only.
-- **Tests cover the deterministic core only.** 114 of them, but nothing
+- **Tests cover the deterministic core only.** 127 of them, but nothing
   exercises the SQL layer, the ingestion cleaning rules, or an end-to-end
   `/chat` call. The ingestion rules in particular are pure functions and would
   be easy to add.
@@ -167,10 +164,10 @@ firewall.
 
 ## What I would do first, in order
 
-1. **Streaming.** Biggest perceived win, and the verification-visible variant is
-   genuinely novel rather than cosmetic. It is also the last big item left.
-2. **Look at the charts.** Nobody has. Everything visual was verified by
-   geometry, not by eye.
+1. **Look at the charts, the footer and the progress list.** Nobody has.
+   Everything visual in this branch was verified by geometry and computed
+   styles, never by eye.
+2. **Serialise requests**, or accept that the demo is single-user and say so.
 3. **Put the stations on the map**, or accept that the density stays invisible.
 5. **More documents in the corpus** — the Year Book and state policy. Metadata
    and reranking are in place, so expansion no longer scales the failure mode.
@@ -198,6 +195,15 @@ seven checks exist because a wrong figure passed one that only asked whether the
 number appeared *somewhere*. In a projection answer every number does. `20.1` is
 real; it is the number of years, and the sentence called it a depth. `13.9%` is
 real; it is Punjab's, and the sentence gave it to Bathinda.
+
+**Measure the thing, not your instrument.** Two scares while building the
+progress stream turned out to be the measuring apparatus. The first stage
+appeared to take 962 ms in the browser and 7 ms over curl — the browser tab was
+hidden, so `setInterval` was throttled to one second, which is why the numbers
+came out as 962 and 1962. Then a request looked hung for three minutes; it was
+real, but caused by a second request left in flight, not by the code under test.
+Both would have sent someone hunting through the streaming path for a bug that
+was not there.
 
 **A single passing run proves very little here.** `temperature: 0` is not
 determinism on this stack: the same prompt returned 91 tokens once and ran to

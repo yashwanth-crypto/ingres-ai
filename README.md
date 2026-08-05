@@ -5,10 +5,12 @@ plain-English question about a district, get a grounded, cited answer with a
 chart or map. Built as a 5-agent pipeline — query understanding → retrieval →
 calculation → verification → response.
 
-**Status: Phases 1–3 complete.** Data loaded (1,607 stations, 36,879 readings
-1996–2024, 23 risk categories, 153 assessment blocks), six tool endpoints
-live, and the five-agent pipeline answering all four demo questions. Next is
-Phase 4, the React frontend.
+**Status: phases 1–6 complete, not deployed.** Data loaded (1,607 stations,
+36,879 readings 1996–2024, 23 risk categories, 153 assessment blocks), six tool
+endpoints live, the agent pipeline answering every demo question, hybrid
+retrieval over the CGWB report, and a React frontend that draws the answer and
+reports each step of the pipeline as it runs. 127 tests over the deterministic
+core. [HANDOFF.md](HANDOFF.md) has what is still weak.
 
 ---
 
@@ -318,6 +320,22 @@ readings show a falling water table** — none rising.
 `POST /chat` runs query understanding → retrieval → calculation →
 verification → response (spec §7).
 
+`POST /chat/stream` runs the same pipeline and reports each step as it reaches
+it, as server-sent events — *"Retrieved — 22 stations reporting on
+2024-01-01"*, *"Checking every figure — 7 checks over 7 figures"* — ending with
+the finished answer. The first event lands about 7 ms after asking, where the
+whole 3-to-15-second wait used to be a bouncing-dot indicator. It is literally
+the same generator: `handle_chat()` consumes `run_chat()` and returns whatever
+it ends with, so the two endpoints cannot answer a question differently.
+
+The draft is deliberately **not** streamed token by token. It would mean showing
+figures the checks may be about to reject, and a 7B model intermittently rambles
+to 21,000 characters before failing — which a reader would watch happen.
+
+Note that nothing queues requests in front of the model. Two questions at once
+degrade badly: one that answers in 13 seconds alone took 183 with a second in
+flight. The demo is single-user.
+
 ### Two LLM backends
 
 Set `LLM_PROVIDER` in `.env`:
@@ -379,7 +397,7 @@ none of them can come back:
 cd backend && python -m pytest tests/
 ```
 
-114 tests over the pieces that need no model, database or network.
+127 tests over the pieces that need no model, database or network.
 
 Every answer then **says what it was checked against** — the interface used to
 mention verification only when it failed, so an answer that passed all seven

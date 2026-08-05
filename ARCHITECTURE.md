@@ -98,14 +98,14 @@ report, which caught **4 wrong categories** in the first attempt.
 | `grounding.py` | 324 | **Deterministic.** The blocking verification gate — seven checks. |
 | `verification.py` | 51 | Model-based review. Advisory only. |
 | `response.py` | 73 | Writes the prose from verified data. |
-| `orchestrator.py` | 538 | Wires it together, decides what the user finally sees, names the source of every derived figure, and builds the chart and map payloads. |
+| `orchestrator.py` | 693 | Wires it together, decides what the user finally sees, names the source of every derived figure, and builds the chart and map payloads. `run_chat()` yields a progress event per step; `handle_chat()` consumes it and returns the last one, so the two endpoints cannot diverge. |
 
 ### API — `backend/app/routers/`
 
 | File | Endpoints |
 |---|---|
 | `tools.py` | `/tools/current_level`, `/depletion_rate`, `/risk_category`, `/compare`, `/blocks` |
-| `chat.py` | `POST /chat` |
+| `chat.py` | `POST /chat`, `POST /chat/stream` — the same pipeline, one server-sent event per step |
 | `health.py` | `GET /health` — database and model reachability, without spending tokens |
 | `main.py` | App, CORS (explicit origins, never `*`), and a background model warm-up at startup |
 
@@ -114,9 +114,10 @@ report, which caught **4 wrong categories** in the first attempt.
 | File | Lines | Job |
 |---|---|---|
 | `App.jsx` | 68 | Shell, wordmark, live health indicator. |
-| `api.js` | 26 | `sendMessage` / `getHealth`. In dev, Vite proxies `/api` so the browser makes no cross-origin request. |
+| `api.js` | 85 | `sendMessage` / `streamMessage` / `getHealth`. In dev, Vite proxies `/api` so the browser makes no cross-origin request. `streamMessage` falls back to the plain endpoint where there is no readable stream, so a missing feature costs the progress display and not the answer. |
 | `categories.js` | 27 | The CGWB category colours, shared. The map and the bars often appear in one answer, and a district red on one and orange on the other reads as two findings. |
-| `components/ChatWindow.jsx` | 128 | State, submission, bottom-anchored message list, scroll pinning. |
+| `components/ChatWindow.jsx` | 122 | State, submission, bottom-anchored message list, scroll pinning — including as the progress list grows. |
+| `components/PipelineProgress.jsx` | 126 | What the pipeline is doing, while it does it. `foldStage()` collapses each announcement into its result, so nine events read as four lines. |
 | `components/AquiferHero.jsx` | 246 | The landing page: an animated cross-section, counting stats, tagged prompt cards. Inline SVG only — no external assets, so it works offline. |
 | `components/MessageBubble.jsx` | 154 | One message. The footer states that every figure was checked, which source answered, and what backed it — an answer that passes seven checks should not look like one from any chatbot. Routes `chart_data` to bars or to the trend line by its `type`. |
 | `components/TrendChart.jsx` | 292 | Depth over time as a cross-section: ground filled above the water table, **Y axis reversed** so a falling line reads as a falling water table. Draws the projection dashed into a shaded future region, ending on a marked crossing of the reference depth. |
@@ -131,6 +132,7 @@ Pure functions only: no model, no database, no network. Runs in about a second.
 | File | Lines | Covers |
 |---|---|---|
 | `test_grounding.py` | 277 | All seven checks, including the three failures that shipped. |
+| `test_streaming.py` | 184 | The event sequence, and that the stream ends with what `/chat` returns. |
 | `test_sources.py` | 184 | Naming a derived figure's source, deduplicating citations, and the garbled-draft fallback. |
 | `test_calculation.py` | 148 | The projection, its chart line, and which fields the model may see. |
 | `test_chart_payloads.py` | 145 | Which visual an intent earns, and the bar payloads. |
@@ -143,6 +145,23 @@ Pure functions only: no model, no database, no network. Runs in about a second.
 ## 4. What happens when you ask a question
 
 Take *"How many years until Ludhiana hits critical depth?"*
+
+Each step below announces itself. `run_chat()` yields a progress event as it
+reaches each one, and the interface shows them as they arrive — the first
+within about 7 ms of asking, where the whole 3-to-15-second wait used to be
+three bouncing dots. `handle_chat()` runs the same generator and returns
+whatever it ends with, so `/chat` and `/chat/stream` cannot answer a question
+two different ways.
+
+The details are counted off the real data: *"22 stations reporting on
+2024-01-01"*, *"3 passages, p. 11, p. 58"*, *"7 checks over 7 figures"*. A
+progress indicator that reports invented work is worse than a spinner, because
+it looks like evidence.
+
+**The draft itself is not streamed**, deliberately. Token-by-token output would
+mean showing figures the checks may be about to reject — and this model
+intermittently rambles to 21,000 characters before failing, which a reader
+would watch happen.
 
 **1 — Understanding.** The model returns constrained JSON:
 `{intent: "years_to_critical", district: "Ludhiana"}`. The district is then
@@ -383,7 +402,7 @@ test bounces the server.
 cd backend && python -m pytest tests/
 ```
 
-114 tests, about a second, no model or database needed.
+127 tests, about a second, no model or database needed.
 
 ---
 
@@ -443,6 +462,11 @@ frames did not come.
   state has not been seen rendered — only its styling confirmed present.
 - **A persona injection wrapped around a real question** is refused outright.
   The injection is resisted; the legitimate question inside is lost. Fails safe.
+- **One question at a time.** Nothing queues requests in front of Ollama, and
+  two at once degrade far worse than linearly: a question that answers in 13
+  seconds alone took **183** with a second request in flight, 78 of them on
+  intent extraction. Fine for a demo driven by one person; not fine if two
+  people type at once.
 - **Map tiles need internet.** Everything else runs offline; OpenStreetMap tiles
   do not.
 - **Malerkotla has no readings** — level, trend and projection are unavailable
