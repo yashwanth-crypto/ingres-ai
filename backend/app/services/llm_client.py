@@ -51,6 +51,14 @@ def _anthropic_client():
     return anthropic.Anthropic(api_key=key)
 
 
+# Fields the grounding checks read but the model must not see. Shown the
+# projection's `projected_year`, a 7B model cited it as though the field name
+# were a source: "around 2044 (projected_year: 2044, citation:
+# projection.confidence_note)". The year is already in confidence_note as
+# prose, which is where an answer should get it from.
+INTERNAL_KEYS = frozenset({"projected_year", "from_year"})
+
+
 def slim_for_prompt(data: dict) -> dict:
     """Drop bulk the model never cites individually, to cut token spend.
 
@@ -70,6 +78,7 @@ def slim_for_prompt(data: dict) -> dict:
                     else v
                 )
                 for k, v in value.items()
+                if k not in INTERNAL_KEYS
             }
         elif isinstance(value, list) and len(value) > 25:
             value = value[:25] + [f"...and {len(value) - 25} more"]

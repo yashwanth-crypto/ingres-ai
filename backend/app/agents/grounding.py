@@ -24,6 +24,37 @@ ALLOWED_SOURCES = {"cgwb", "punjab", "india", "district", "average", "mean"}
 # that sensible rounding passes, tight enough that a wrong figure does not.
 ABS_TOLERANCE = 0.055
 
+# Keys whose values measure a particular quantity. Check 2 asks only whether a
+# figure appears in the data at all, which is not enough: every number in a
+# projection answer is in the data somewhere, and the model still stated the
+# number of years as though it were a depth.
+DEPTH_KEYS = frozenset(
+    {"value_m", "district_mean_m", "current_depth_m", "reference_depth_m"}
+)
+RATE_KEYS = frozenset({"rate_m_per_year", "current_rate_m_per_year"})
+DURATION_KEYS = frozenset({"years_to_reference_depth", "years_analyzed"})
+
+# A figure written with a unit, and the quantity it therefore has to match.
+# Rate is tested before depth, and depth refuses to match anything followed by
+# "/year" or "per year", so "0.504 m/year" is never read as a depth.
+UNIT_CHECKS = (
+    (
+        "rate",
+        r"(?<![\d.])(-?\d+(?:\.\d+)?)\s*(?:m|met(?:re|er)s?)\s*(?:/|per\s+)(?:year|yr|annum)",
+        "a rate in metres per year",
+    ),
+    (
+        "depth",
+        r"(?<![\d.])(-?\d+(?:\.\d+)?)\s*(?:m|met(?:re|er)s?)\b(?!\s*(?:/|per\b))",
+        "a depth in metres",
+    ),
+    (
+        "duration",
+        r"(?<![\d.])(-?\d+(?:\.\d+)?)\s*(?:years?|yrs?)\b",
+        "a number of years",
+    ),
+)
+
 
 def _collect_strings(node, out: set[str]) -> None:
     if isinstance(node, dict):
@@ -54,6 +85,30 @@ def _collect_numbers(node, out: set[float]) -> None:
                 out.add(float(part))
             except ValueError:
                 pass
+
+
+def _typed_numbers(node, out: dict[str, set[float]]) -> None:
+    """Collect figures by what they measure, not merely by value."""
+    if isinstance(node, dict):
+        # A ranked row carries its unit as data rather than in a telling key
+        # name, so classify it from that.
+        unit = node.get("unit")
+        value = node.get("value")
+        if isinstance(unit, str) and isinstance(value, (int, float)):
+            out["rate" if "/year" in unit else "depth"].add(float(value))
+
+        for key, item in node.items():
+            if isinstance(item, (int, float)) and not isinstance(item, bool):
+                if key in DEPTH_KEYS:
+                    out["depth"].add(float(item))
+                elif key in RATE_KEYS:
+                    out["rate"].add(float(item))
+                elif key in DURATION_KEYS:
+                    out["duration"].add(float(item))
+            _typed_numbers(item, out)
+    elif isinstance(node, list):
+        for item in node:
+            _typed_numbers(item, out)
 
 
 def _number_supported(value: float, known: set[float]) -> bool:
@@ -166,6 +221,32 @@ def grounding_issues(draft: str, raw_data: dict) -> list[str]:
                     f"{projection.get('reference_depth_m'):g} m reference depth "
                     f"is reached, but the projection gives {projected_year}."
                 )
+
+    # --- 6. A figure written with a unit must match a value of that unit ---
+    # Check 2 only asks whether a figure appears in the data at all. In a
+    # projection answer every figure does, so "projected to reach a reference
+    # depth of 20.1 metres" passed: 20.1 is real, but it is the number of
+    # years, and the depth is 30. Being in the data is not the same as
+    # measuring the thing the sentence says it measures.
+    #
+    # Skipped for report-backed answers. Those are grounded in prose whose
+    # passages quote figures of every kind, so there is no typed set to check
+    # against and this would flag legitimate quotation.
+    if not raw_data.get("passages"):
+        typed: dict[str, set[float]] = {"depth": set(), "rate": set(), "duration": set()}
+        _typed_numbers(raw_data, typed)
+
+        for kind, pattern, noun in UNIT_CHECKS:
+            known = typed[kind]
+            if not known:
+                continue  # nothing of this kind was retrieved; nothing to say
+            for raw in re.findall(pattern, prose):
+                if not _number_supported(float(raw), known):
+                    issues.append(
+                        f"The draft states {raw} as {noun}, but no such value "
+                        f"was retrieved - it may be a figure of a different "
+                        f"kind restated with the wrong unit."
+                    )
 
     # De-duplicate while preserving order.
     seen, unique = set(), []
