@@ -86,7 +86,7 @@ report, which caught **4 wrong categories** in the first attempt.
 |---|---|---|
 | `services/groundwater_service.py` | 360 | All SQL. Current level, depletion rate, risk category, blocks, comparison, ranking, yearly series, map points, categories in bulk. No FastAPI imports, so agents call it directly instead of looping back over HTTP. |
 | `services/rag_service.py` | 145 | Semantic search over the report, then a deterministic rerank on what each chunk says it is about. Vectors are pre-normalised, so search is a dot product over a 534 KB matrix — no vector database. Passages below 0.55 similarity are discarded rather than answered from. |
-| `services/llm_client.py` | 233 | The model boundary. One interface, two backends. Handles structured output, refusals, and a retry when a small model runs out of tokens mid-JSON. `slim_for_prompt()` also withholds fields the checks read but the model must not see. |
+| `services/llm_client.py` | 252 | The model boundary. One interface, two backends. Handles structured output, refusals, and three attempts when a small model runs out of tokens mid-JSON — the last one sampling, to break a repetition loop that greedy decoding cannot leave. `slim_for_prompt()` also withholds fields the checks read but the model must not see. |
 
 ### Agents — `backend/app/agents/`
 
@@ -95,10 +95,10 @@ report, which caught **4 wrong categories** in the first attempt.
 | `query_understanding.py` | 206 | Question → structured intent, via constrained JSON. Canonicalises the district itself, so a near-miss spelling never reaches SQL, and resolves a follow-up that points back at the conversation rather than naming its subject. |
 | `retrieval.py` | 142 | **Deterministic.** Maps intent to service calls, and passes the district to the reranker rather than only gluing it onto the query. No model involved. |
 | `calculation.py` | 108 | **Deterministic.** Projects the water table forward at its measured rate, and states the year it lands on rather than leaving that as arithmetic. |
-| `grounding.py` | 314 | **Deterministic.** The blocking verification gate — seven checks. |
+| `grounding.py` | 324 | **Deterministic.** The blocking verification gate — seven checks. |
 | `verification.py` | 51 | Model-based review. Advisory only. |
-| `response.py` | 72 | Writes the prose from verified data. |
-| `orchestrator.py` | 462 | Wires it together, decides what the user finally sees, and builds the chart and map payloads. |
+| `response.py` | 73 | Writes the prose from verified data. |
+| `orchestrator.py` | 538 | Wires it together, decides what the user finally sees, names the source of every derived figure, and builds the chart and map payloads. |
 
 ### API — `backend/app/routers/`
 
@@ -118,7 +118,7 @@ report, which caught **4 wrong categories** in the first attempt.
 | `categories.js` | 27 | The CGWB category colours, shared. The map and the bars often appear in one answer, and a district red on one and orange on the other reads as two findings. |
 | `components/ChatWindow.jsx` | 128 | State, submission, bottom-anchored message list, scroll pinning. |
 | `components/AquiferHero.jsx` | 246 | The landing page: an animated cross-section, counting stats, tagged prompt cards. Inline SVG only — no external assets, so it works offline. |
-| `components/MessageBubble.jsx` | 69 | One message: prose, source badge, citations, unverified warning. Routes `chart_data` to bars or to the trend line by its `type`. |
+| `components/MessageBubble.jsx` | 154 | One message. The footer states that every figure was checked, which source answered, and what backed it — an answer that passes seven checks should not look like one from any chatbot. Routes `chart_data` to bars or to the trend line by its `type`. |
 | `components/TrendChart.jsx` | 292 | Depth over time as a cross-section: ground filled above the water table, **Y axis reversed** so a falling line reads as a falling water table. Draws the projection dashed into a shaded future region, ending on a marked crossing of the reference depth. |
 | `components/RankChart.jsx` | 121 | Districts side by side, worst first, coloured by category, the answering district held at full opacity. Plain CSS grid — a grid lays out labelled horizontal bars better than a chart library. |
 | `components/MapView.jsx` | 126 | Districts coloured by category, re-measured after layout settles. Names any district it cannot plot. |
@@ -131,6 +131,7 @@ Pure functions only: no model, no database, no network. Runs in about a second.
 | File | Lines | Covers |
 |---|---|---|
 | `test_grounding.py` | 277 | All seven checks, including the three failures that shipped. |
+| `test_sources.py` | 184 | Naming a derived figure's source, deduplicating citations, and the garbled-draft fallback. |
 | `test_calculation.py` | 148 | The projection, its chart line, and which fields the model may see. |
 | `test_chart_payloads.py` | 145 | Which visual an intent earns, and the bar payloads. |
 | `test_districts.py` | 73 | Canonicalisation across CGWB's spellings. |
@@ -213,11 +214,37 @@ reviewer is not meant to have.
 
 If grounding still fails after the rewrite, the answer is replaced by a plain
 data dump saying so. **An unverifiable answer is never shown as if it were
-verified.**
+verified.** The dump quotes the retrieved passages as well as the figures,
+because a report-backed answer has none of the level, rate or category fields
+it used to list, and without them it was a preamble and nothing else.
+
+**When the model produces nothing usable.** Greedy decoding cannot escape a
+repetition loop: the same drinking-water prompt returned 91 tokens once and ran
+to its token cap the next time, mid-string and unparseable, at temperature 0
+both times. There are three attempts — more room, then a different sample — and
+if all three fail the result is `LLMGarbledResponse` rather than a bare
+unavailability. The distinction matters: nothing can be done about a model that
+is down, but a model that rambled has not stopped the retrieved data from being
+worth showing, so it is shown.
+
+**`temperature: 0` is not determinism here.** A single passing run is weak
+evidence on this stack; anything worth trusting was run several times.
 
 **6 — Assembly.** Citations, chart and map are built **from the data**, not from
 model flags — it left both flags false on questions that obviously wanted a
 visual, and left the citations array empty while writing citations inline.
+Citations are deduplicated: two chunks retrieved from one page of the report
+cited that page twice, which says nothing except where the chunker split it.
+
+Every derived figure is also handed a source it can actually be cited by,
+*before* drafting. A reading has a station and a date; a depletion rate has
+neither, being the median of dozens of station trends. Required to put a source
+in parentheses after every number and given nothing citable, the model quoted
+the field name: *"falling at 1.205 meters per year (depletion_rate)"*. The
+sentence it should quote — *"Median trend across 37 stations, Sangrur, last 10
+years"* — is now written into the data, which is also the only place it works
+from: the grounding check recognises a citation by finding it in the retrieved
+data.
 
 Which visual follows from the intent. One district over time gets the trend
 line, with the projection drawn on it when there is one. Several districts
@@ -356,7 +383,7 @@ test bounces the server.
 cd backend && python -m pytest tests/
 ```
 
-102 tests, about a second, no model or database needed.
+114 tests, about a second, no model or database needed.
 
 ---
 
@@ -411,8 +438,9 @@ frames did not come.
   Punjab-wide figure and names a district lower down is one chunk, marked
   district-scoped. The metadata cannot express that split; only check 7 sees it.
   Sentence-level scoping would be the real fix.
-- **"Why is groundwater falling in Punjab?"** is rejected by grounding and falls
-  back to a data dump. Honest, but avoid it in a demo.
+- **The unverified path is no longer reachable on any question tried.** That is
+  the checks working, but it also means the interface's "could not be verified"
+  state has not been seen rendered — only its styling confirmed present.
 - **A persona injection wrapped around a real question** is refused outright.
   The injection is resisted; the legitimate question inside is lost. Fails safe.
 - **Map tiles need internet.** Everything else runs offline; OpenStreetMap tiles

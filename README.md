@@ -379,6 +379,15 @@ none of them can come back:
 cd backend && python -m pytest tests/
 ```
 
+114 tests over the pieces that need no model, database or network.
+
+Every answer then **says what it was checked against** — the interface used to
+mention verification only when it failed, so an answer that passed all seven
+checks looked like an answer from any chatbot. Each figure is also given a
+source it can be cited by before drafting: a reading has a station and a date, a
+depletion rate has neither, and asked for a source it did not have the model
+quoted the field name.
+
 ## Hybrid retrieval — database *and* document
 
 Two sources, chosen by intent, never mixed:

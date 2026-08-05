@@ -11,8 +11,8 @@ hybrid retrieval, React frontend. 10 of 11 test questions answer cleanly.
 Branch `feat/answer-visuals`, ahead of `main`, **no remote**. The work on it:
 the projection is drawn, ranked and compared answers get charts, three
 verification holes are closed, the RAG index is rebuilt with real metadata and
-correct page citations, follow-ups are tested and one broken shape fixed, and
-there is a 102-test suite.
+correct page citations, follow-ups are tested and one broken shape fixed, every
+answer now says what it was checked against, and there is a 114-test suite.
 
 That is a working system. It is not yet a *good* one, for the reasons below.
 
@@ -41,28 +41,26 @@ reject. Two workable shapes:
   stations… checking 3 figures…") and keep the answer atomic. Less impressive,
   much simpler.
 
-### 2. The prose is stilted, and leaks internals
+### 2. The prose is stilted
 
 Correct, cited, robotic. Every answer follows the same shape because a 7B model
-is doing the writing. Worse, it cites field names as though they were sources:
+is doing the writing. That is the part that remains.
 
-> "falling at a rate of 1.205 meters per year (depletion_rate). **}**
-> (Sangrur, depletion_rate)"
-
-A stray brace and a key used as a citation. Grounding check 1 misses it because
-only capitalised tokens are treated as citations — so this is cosmetic to the
-checks and glaring to a reader.
+The field-name citations are gone. *"falling at 1.205 meters per year
+(depletion_rate)"* was not a model quirk but a gap: the prompt demanded a source
+in parentheses after every number and a derived rate had none to give. Handed
+the sentence it should quote, it quotes it.
 
 Switching `LLM_PROVIDER=anthropic` would cost about $0.02 a question and fix
 most of this without touching any code. **That has been decided against** — the
 system is meant to hold up on a free local model, and "correct answers on a 7B"
 is a stronger claim than "we used a good model".
 
-So this needs its own fix. The field-name citations are the same class as the
-`projected_year` leak, which was solved by withholding the field from the prompt
-rather than by asking the model not to quote it; `slim_for_prompt()` is the
-place to look. The stilted shape is harder and may simply be the cost of the
-decision.
+The stilted shape is what that decision costs, and there is no cheap fix for
+it. Both leaks that did have one — the field names here, `projected_year`
+before — turned out to be the same lesson: the model reaches for a label when
+nothing citable is in front of it, so put the right thing in front of it rather
+than instructing it not to.
 
 ### 3. Follow-up questions work, with one shape now guarded
 
@@ -108,21 +106,27 @@ And the citations were simply wrong. The report's printed page runs nine behind
 the PDF's, and chunks cited the PDF index — so a fluoride passage was cited as
 page 67, which is the **Iron** section. Plausible-looking, wrong contaminant.
 
-### 5. The interface is still plain in places
+### 5. The map is thinner than the pitch
 
-The trend chart and the ranked bars are done. The message bubble is not: prose,
-a small badge, and citations as a grey `[1] [2] [3]` list. It is the last plain
-surface a judge will look at.
+The trend chart, the ranked bars and the message bubble are done. The map is
+not: 23 district polygons for a system that advertises 1,607 stations and
+36,879 readings. None of that density is visible anywhere, on the one surface
+where it would land hardest.
 
-The map is also thinner than the pitch. It shows 23 district polygons for a
-system that advertises 1,607 stations and 36,879 readings; none of that density
-is visible anywhere.
+### 6. Nothing produces an unverified answer any more
 
-### 6. "Why is groundwater falling in Punjab?" still fails
+*"Why is groundwater falling in Punjab?"* used to be rejected by grounding and
+fall back to a data dump. It now routes to the report and verifies, three runs
+out of three — fixed as a side effect of rebuilding the index, since the
+question was always answerable from the narrative chapters and a quarter of the
+corpus was chart-axis noise competing with them.
 
-Grounding rejects the draft and falls back to a data dump. It fails safely, but
-it is a natural question and it does not work. Worth diagnosing rather than
-avoiding.
+That leaves a smaller problem. Every question tried now verifies, including
+Malerkotla with no readings, a Malerkotla comparison, and a Barnala projection.
+So the interface's "could not be verified" state has never been seen rendered.
+Its styling is confirmed present in the compiled CSS and nothing more. If that
+path matters, it needs a deliberate way to exercise it — a test fixture or a
+debug flag — because natural questions no longer reach it.
 
 ### 7. Not deployed
 
@@ -151,7 +155,7 @@ firewall.
   "13.9% of samples across Punjab" instead of "in Bathinda, 13.9%". It cannot
   stop a reader drawing the same conclusion from two adjacent sentences, and it
   covers percentages only.
-- **Tests cover the deterministic core only.** 102 of them, but nothing
+- **Tests cover the deterministic core only.** 114 of them, but nothing
   exercises the SQL layer, the ingestion cleaning rules, or an end-to-end
   `/chat` call. The ingestion rules in particular are pure functions and would
   be easy to add.
@@ -164,12 +168,10 @@ firewall.
 ## What I would do first, in order
 
 1. **Streaming.** Biggest perceived win, and the verification-visible variant is
-   genuinely novel rather than cosmetic.
-2. **Fix the field-name citations** in the prose. This was filed under "switch
-   to Claude and it goes away"; with the swap decided against it needs its own
-   fix, and it is the same class as the `projected_year` leak already solved by
-   withholding the field from the prompt.
-3. **Style the message bubble and citations.** The last plain surface.
+   genuinely novel rather than cosmetic. It is also the last big item left.
+2. **Look at the charts.** Nobody has. Everything visual was verified by
+   geometry, not by eye.
+3. **Put the stations on the map**, or accept that the density stays invisible.
 5. **More documents in the corpus** — the Year Book and state policy. Metadata
    and reranking are in place, so expansion no longer scales the failure mode.
 6. Deploy, if time remains.
@@ -196,6 +198,12 @@ seven checks exist because a wrong figure passed one that only asked whether the
 number appeared *somewhere*. In a projection answer every number does. `20.1` is
 real; it is the number of years, and the sentence called it a depth. `13.9%` is
 real; it is Punjab's, and the sentence gave it to Bathinda.
+
+**A single passing run proves very little here.** `temperature: 0` is not
+determinism on this stack: the same prompt returned 91 tokens once and ran to
+its token cap the next time, unparseable. The drinking-water question had been
+failing intermittently for a while behind three consecutive clean runs. Run it
+five times.
 
 **Test the thing nobody has run.** `history` was wired in from the first day
 and exercised for the first time today. Five of six shapes worked, which is why
