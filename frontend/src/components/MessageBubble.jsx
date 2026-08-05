@@ -6,8 +6,8 @@ export default function MessageBubble({ message }) {
 
   if (isUser) {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-depth-700 px-4 py-2.5 text-white">
+      <div className="message-in flex justify-end">
+        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-depth-700 px-4 py-2.5 text-white shadow-sm">
           {message.content}
         </div>
       </div>
@@ -15,7 +15,7 @@ export default function MessageBubble({ message }) {
   }
 
   return (
-    <div className="max-w-[92%]">
+    <div className="message-in max-w-[92%]">
       <div className="rounded-2xl rounded-bl-sm border border-stone-200 bg-white px-4 py-3">
         <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
 

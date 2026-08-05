@@ -12,3 +12,91 @@ body {
 .leaflet-container {
   z-index: 0;
 }
+
+/* --------------------------------------------------------------------------
+   Animations. All are decorative, so they are disabled wholesale for anyone
+   who has asked for reduced motion.
+   -------------------------------------------------------------------------- */
+
+/* The saturated zone sinks, pauses, and resets - the depletion story in one
+   loop. Slow on purpose: it should register as movement, not demand attention
+   while someone is reading. */
+@keyframes sink {
+  0%,
+  8% {
+    transform: translateY(-26px);
+  }
+  70%,
+  100% {
+    transform: translateY(34px);
+  }
+}
+
+.water-table {
+  animation: sink 14s cubic-bezier(0.4, 0, 0.5, 1) infinite alternate;
+}
+
+/* Wellhead sensors reporting. */
+@keyframes wellPulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    r: 3;
+  }
+  50% {
+    opacity: 1;
+    r: 4.5;
+  }
+}
+
+.well-pulse {
+  animation: wellPulse 2.8s ease-in-out infinite;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fadeUp 0.45s ease-out both;
+}
+
+/* Assistant replies arrive rather than snapping in. */
+.message-in {
+  animation: fadeUp 0.35s ease-out both;
+}
+
+/* Thinking indicator: three dots, staggered. */
+@keyframes bounceDot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.dot {
+  animation: bounceDot 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .water-table,
+  .well-pulse,
+  .fade-up,
+  .message-in,
+  .dot {
+    animation: none !important;
+  }
+}

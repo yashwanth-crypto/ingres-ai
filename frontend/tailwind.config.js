@@ -14,7 +14,10 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["Inter var", "Segoe UI", "system-ui", "sans-serif"],
+        // System stacks only - the demo may run with no internet, so a webfont
+        // would silently fall back to something worse.
+        sans: ["Segoe UI", "system-ui", "-apple-system", "sans-serif"],
+        display: ["Georgia", "Cambria", "Times New Roman", "serif"],
       },
     },
   },

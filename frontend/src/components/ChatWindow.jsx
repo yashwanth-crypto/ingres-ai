@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sendMessage } from "../api.js";
+import AquiferHero from "./AquiferHero.jsx";
 import MessageBubble from "./MessageBubble.jsx";
-import SuggestedQuestions from "./SuggestedQuestions.jsx";
 
 export default function ChatWindow() {
   const [messages, setMessages] = useState([]);
@@ -47,28 +47,29 @@ export default function ChatWindow() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6">
-        {messages.length === 0 && (
-          <div className="mx-auto max-w-xl pt-6 text-center">
-            <h2 className="text-lg font-semibold text-slate-800">
-              Ask about groundwater in Punjab
-            </h2>
-            <p className="mt-1.5 text-sm text-slate-500">
-              Answers come from CGWB monitoring data — 1,607 stations, 36,879
-              readings from 1996 to 2024 — and every figure is checked against
-              that data before you see it.
-            </p>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto">
+        {messages.length === 0 ? (
+          <AquiferHero onPick={ask} disabled={busy} />
+        ) : (
+          <div className="space-y-4 px-4 py-6 sm:px-6">
+            {messages.map((m, i) => (
+              <MessageBubble key={i} message={m} />
+            ))}
 
-        {messages.map((m, i) => (
-          <MessageBubble key={i} message={m} />
-        ))}
-
-        {busy && (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-depth-600" />
-            Retrieving data and checking the answer&hellip;
+            {busy && (
+              <div className="flex items-center gap-2.5 text-sm text-slate-500">
+                <span className="flex gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="dot inline-block h-1.5 w-1.5 rounded-full bg-depth-600"
+                      style={{ animationDelay: `${i * 0.15}s` }}
+                    />
+                  ))}
+                </span>
+                Retrieving data and checking every figure&hellip;
+              </div>
+            )}
           </div>
         )}
 
@@ -81,13 +82,7 @@ export default function ChatWindow() {
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-stone-200 bg-stone-50 px-4 py-4 sm:px-6">
-        {messages.length === 0 && (
-          <div className="mb-3">
-            <SuggestedQuestions onPick={ask} disabled={busy} />
-          </div>
-        )}
-
+      <div className="border-t border-stone-200 bg-stone-50/80 px-4 py-4 backdrop-blur sm:px-6">
         <form
           onSubmit={(e) => {
             e.preventDefault();
