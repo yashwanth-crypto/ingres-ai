@@ -293,17 +293,27 @@ def grounding_issues(draft: str, raw_data: dict) -> list[str]:
             # mg/L") is usually a definition the report states once and applies
             # everywhere, and requiring it to share a sentence with the
             # district would reject correct answers.
-            for figure in re.findall(r"(?<![\d.])(\d+(?:\.\d+)?)\s*%", sentence):
+            unsupported = [
+                figure
+                for figure in re.findall(r"(?<![\d.])(\d+(?:\.\d+)?)\s*%", sentence)
                 if not any(
                     _mentions_figure(source, figure) and _mentions_any(source, named)
                     for source in source_sentences
-                ):
-                    issues.append(
-                        f"The draft ties {figure}% to "
-                        f"{' or '.join(named)}, but no passage states that "
-                        f"figure for that district - it may be a Punjab-wide "
-                        f"finding reported as a local one."
-                    )
+                )
+            ]
+            # One issue for the sentence, not one per figure. A sentence
+            # quoting a three-way split produced three near-identical
+            # complaints, and the rewrite prompt carrying all of them sent the
+            # model into a 21,000-character ramble that blew its token budget
+            # and came back as invalid JSON.
+            if unsupported:
+                figures = ", ".join(f"{f}%" for f in unsupported)
+                issues.append(
+                    f"The draft ties {figures} to {' or '.join(named)}, but no "
+                    f"passage states those figures for that district - they may "
+                    f"be Punjab-wide findings reported as local ones. State them "
+                    f"as Punjab-wide, or leave them out."
+                )
 
     # De-duplicate while preserving order.
     seen, unique = set(), []

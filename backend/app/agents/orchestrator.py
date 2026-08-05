@@ -17,7 +17,7 @@ from app.agents.retrieval import retrieval_agent
 from app.agents.verification import verification_agent
 from app.scripts.districts import CANONICAL_DISTRICTS
 from app.services import groundwater_service as gw
-from app.services.llm_client import LLMUnavailable
+from app.services.llm_client import LLMGarbledResponse, LLMUnavailable
 
 log = logging.getLogger(__name__)
 
@@ -76,15 +76,44 @@ def handle_chat(db: Session, message: str, history: list[dict] | None = None) ->
     if intent.intent == "years_to_critical":
         raw_data = calculation_agent(raw_data)
 
+    _name_the_sources(raw_data)
+
     try:
-        draft = response_agent(raw_data, message)
+        try:
+            draft = response_agent(raw_data, message)
+        except LLMGarbledResponse as exc:
+            # The model answered, just never in a form we could parse - it fell
+            # into a repetition loop and ran to its token cap mid-string. The
+            # retrieved data is untouched by that, and showing it beats telling
+            # someone their question failed when we hold the answer to it.
+            log.error("No usable draft (%s) - showing the retrieved data", exc)
+            return {
+                "answer": _data_dump(raw_data, [f"the model produced no usable answer ({exc})"]),
+                "citations": _citations(raw_data),
+                "chart_data": _chart(db, intent, raw_data) if _wants_chart(intent) else None,
+                "map_data": _map(db, intent, raw_data) if _wants_map(intent, raw_data) else None,
+                "intent": intent.intent,
+                "verified": False,
+                "source": "report" if raw_data.get("passages") else "database",
+            }
+
         hard, soft = _check(draft.answer, raw_data)
 
         if hard or soft:
             log.warning("Rejected draft - hard=%s soft=%s", hard, soft)
             first = (draft, hard, soft)
-            draft = response_agent(raw_data, message, issues=hard + soft)
-            hard, soft = _check(draft.answer, raw_data)
+            try:
+                draft = response_agent(raw_data, message, issues=hard + soft)
+                hard, soft = _check(draft.answer, raw_data)
+            except LLMUnavailable as exc:
+                # The rewrite is a second chance, not a dependency. Asked to fix
+                # three objections at once, a 7B model rambled past its token
+                # budget and returned truncated JSON - and because both calls
+                # sat under one `try`, that error replaced an answer we already
+                # had with a bare failure message. Fall back to the first draft
+                # and let the checks below decide what it is worth.
+                log.warning("Rewrite failed (%s) - falling back to first draft", exc)
+                draft, hard, soft = first
 
             if hard and not first[1]:
                 # The first draft was properly grounded and only the advisory
@@ -151,6 +180,36 @@ def _check(draft: str, raw_data: dict) -> tuple[list[str], list[str]]:
     verdict = verification_agent(draft, raw_data)
     soft = [] if verdict.approved else list(verdict.issues)
     return hard, soft
+
+
+def _name_the_sources(raw_data: dict) -> None:
+    """Give every derived figure a source the answer can actually cite.
+
+    The prompt requires a source in parentheses after every number. A single
+    reading has one - a station and a date. A depletion rate does not: it is the
+    median of dozens of station trends. Given nothing citable, the model reached
+    for the nearest label to hand and wrote "falling at 1.205 meters per year
+    (depletion_rate)", quoting the field name as though it were a source.
+
+    So the figure is handed the sentence it should quote. Written into the data
+    rather than the prompt on purpose: the grounding check recognises a citation
+    by finding it in the retrieved data, so a string the model may quote has to
+    live there.
+    """
+    rate = raw_data.get("depletion_rate")
+    if rate and not rate.get("source"):
+        rate["source"] = (
+            f"Median trend across {len(rate['stations_used'])} stations, "
+            f"{rate['district']}, last {rate['years_analyzed']} years"
+        )
+
+    projection = raw_data.get("projection")
+    if projection and projection.get("stations_used") and not projection.get("source"):
+        district = raw_data.get("district") or ""
+        projection["source"] = (
+            f"Projected from {projection['stations_used']} station trends"
+            + (f", {district}" if district else "")
+        )
 
 
 def _citations(raw_data: dict) -> list[dict]:
@@ -441,6 +500,15 @@ def _data_dump(raw_data: dict, issues: list[str]) -> str:
             f"{risk['blocks_over_exploited']} of {risk['blocks_assessed']} blocks "
             f"over-exploited."
         )
+    # A report-backed answer has none of the fields above, so without this the
+    # dump was a preamble and nothing else. The passages are the data here, and
+    # quoting them verbatim is exactly what "here is the data itself" means.
+    for passage in raw_data.get("passages") or []:
+        text = " ".join(passage["text"].split())
+        lines.append(f"From {passage['citation']}:")
+        lines.append(f"  “{text[:400]}…”" if len(text) > 400 else f"  “{text}”")
+        lines.append("")
+
     if raw_data.get("unavailable"):
         lines.append(raw_data["unavailable"])
     lines += ["", f"Verification flagged: {'; '.join(issues)}"]

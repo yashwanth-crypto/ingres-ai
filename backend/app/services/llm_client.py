@@ -34,6 +34,15 @@ class LLMUnavailable(Exception):
     """The provider is unreachable, unconfigured, or declined to answer."""
 
 
+class LLMGarbledResponse(LLMUnavailable):
+    """The provider answered, but never with anything matching the schema.
+
+    Distinct from being unreachable, because the two deserve different
+    outcomes: nothing can be done about a model that is down, but a model that
+    rambled has not stopped the retrieved data from being worth showing.
+    """
+
+
 def provider() -> str:
     return get_settings().llm_provider.strip().lower()
 
@@ -119,9 +128,15 @@ def _anthropic_structured(
 
 
 def _ollama_structured(
-    system: str, user: str, schema: type[T], max_tokens: int
+    system: str, user: str, schema: type[T], max_tokens: int, attempt: int = 1
 ) -> T:
     settings = get_settings()
+    # Greedy decoding is right for extraction, but it is also what traps a 7B
+    # model in a repetition loop: on one drinking-water question the same
+    # prompt returned 91 tokens once and ran to the 2048-token cap the next
+    # time, mid-string and unparseable. Sampling on the last attempt is the way
+    # out of a loop that temperature 0 cannot leave.
+    temperature = 0 if attempt < 3 else 0.3
     try:
         reply = httpx.post(
             f"{settings.ollama_base_url}/api/chat",
@@ -135,7 +150,7 @@ def _ollama_structured(
                 # equivalent of the Claude API's structured outputs.
                 "format": schema.model_json_schema(),
                 "stream": False,
-                "options": {"temperature": 0, "num_predict": max_tokens},
+                "options": {"temperature": temperature, "num_predict": max_tokens},
             },
             timeout=180.0,
         )
@@ -151,10 +166,13 @@ def _ollama_structured(
         return schema.model_validate_json(content)
     except ValidationError:
         # A small model can run out of output tokens partway through the JSON,
-        # especially on long retrieved passages. One retry with more room.
-        if max_tokens < 4096:
-            return _ollama_structured(system, user, schema, 4096)
-        raise LLMUnavailable(
+        # especially on long retrieved passages. More room first, then a
+        # different sample.
+        if attempt < 3:
+            return _ollama_structured(
+                system, user, schema, max(4096, max_tokens), attempt + 1
+            )
+        raise LLMGarbledResponse(
             f"{settings.ollama_model} could not produce a valid response for "
             f"this question, even with a longer output budget."
         ) from None
@@ -223,6 +241,7 @@ __all__ = [
     "EFFORT_EXTRACTION",
     "EFFORT_REASONING",
     "MODEL",
+    "LLMGarbledResponse",
     "LLMUnavailable",
     "describe",
     "generate_text",

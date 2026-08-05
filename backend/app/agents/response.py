@@ -32,6 +32,7 @@ SYSTEM = """Write a clear, direct answer to the user's groundwater question usin
 
 Rules:
 - Every number must be followed by its source in parentheses, e.g. "12.4 m (Kot Shamir, 2024-01-01)" or "over-exploited (CGWB 2024)".
+- Where a figure's block carries a "source", copy that text verbatim as the citation, e.g. "0.78 m/year (Median trend across 37 stations, Bathinda, last 15 years)". Never cite a field name: "(depletion_rate)" and "(projection.confidence_note)" are labels from the data structure, not sources, and mean nothing to a reader.
 - Never state a number that does not appear in the data. If the data does not answer the question, say so plainly.
 - Water levels are depth below ground: a LARGER number means a DEEPER water table, which is worse. A rising rate means the water table is falling.
 - If the data includes a confidence_note or threshold_caveat, reflect its substance in the answer. Do not present a projection as a certainty.
