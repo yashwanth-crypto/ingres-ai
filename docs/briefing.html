@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<style>
+  /* Standalone reset. The hosted version gets this from its runtime. */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  img { max-width: 100%; height: auto; }
+</style>
+<title>INGRES — team briefing</title>
+<style>
+  :root {
+    --depth-900: #0b2c34;
+    --depth-700: #164e5b;
+    --depth-600: #1d6473;
+    --depth-100: #d3e7ea;
+    --sand: #c9b79a;
+    --earth: #a08a6d;
+    --alert: #b45309;
+    --critical: #b91c1c;
+
+    --ground: #faf9f7;
+    --panel: #ffffff;
+    --rule: #e4e0da;
+    --ink: #1c1a17;
+    --ink-soft: #6b6560;
+    --ink-faint: #938d86;
+
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --serif: Georgia, Cambria, "Times New Roman", serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --depth-100: #1e4d59;
+      --ground: #0e1416;
+      --panel: #141b1e;
+      --rule: #273136;
+      --ink: #e8e4de;
+      --ink-soft: #9aa5a8;
+      --ink-faint: #6d7a7e;
+      --sand: #8a7a63;
+      --earth: #6f6250;
+      --alert: #d98324;
+      --critical: #e06666;
+      --depth-700: #7fc2d1;
+      --depth-600: #9ed3de;
+      --depth-900: #cfe9ee;
+    }
+  }
+  :root[data-theme="dark"] {
+    --depth-100: #1e4d59;
+    --ground: #0e1416;
+    --panel: #141b1e;
+    --rule: #273136;
+    --ink: #e8e4de;
+    --ink-soft: #9aa5a8;
+    --ink-faint: #6d7a7e;
+    --sand: #8a7a63;
+    --earth: #6f6250;
+    --alert: #d98324;
+    --critical: #e06666;
+    --depth-700: #7fc2d1;
+    --depth-600: #9ed3de;
+    --depth-900: #cfe9ee;
+  }
+  :root[data-theme="light"] {
+    --depth-900: #0b2c34;
+    --depth-700: #164e5b;
+    --depth-600: #1d6473;
+    --depth-100: #d3e7ea;
+    --sand: #c9b79a;
+    --earth: #a08a6d;
+    --alert: #b45309;
+    --critical: #b91c1c;
+    --ground: #faf9f7;
+    --panel: #ffffff;
+    --rule: #e4e0da;
+    --ink: #1c1a17;
+    --ink-soft: #6b6560;
+    --ink-faint: #938d86;
+  }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 44rem; margin: 0 auto; padding: 0 1.25rem 5rem; }
+
+  /* --- header: the strata, echoing the app's cross-section --- */
+  header.masthead {
+    background:
+      linear-gradient(to bottom,
+        var(--depth-900) 0%, var(--depth-900) 46%,
+        var(--sand) 46%, var(--sand) 62%,
+        var(--earth) 62%, var(--earth) 100%);
+    padding: 3.25rem 0 0;
+    margin-bottom: 2.5rem;
+  }
+  header.masthead .wrap { padding-bottom: 2.5rem; }
+  .eyebrow {
+    font-size: .72rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--depth-100); opacity: .8; margin: 0 0 .6rem;
+  }
+  header.masthead h1 {
+    font-family: var(--serif); font-weight: 400;
+    font-size: clamp(2rem, 6vw, 2.9rem); line-height: 1.1;
+    color: #fff; margin: 0 0 .7rem; text-wrap: balance;
+  }
+  header.masthead p {
+    color: var(--depth-100); margin: 0; max-width: 34rem; font-size: 1.02rem;
+  }
+
+  section { margin: 0 0 3rem; }
+  h2 {
+    font-family: var(--serif); font-weight: 400;
+    font-size: 1.55rem; line-height: 1.2; color: var(--depth-900);
+    margin: 0 0 .3rem; text-wrap: balance;
+  }
+  h2 + .sub { color: var(--ink-soft); margin: 0 0 1.4rem; font-size: .95rem; }
+  h3 {
+    font-size: .78rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 2rem 0 .8rem; font-weight: 600;
+  }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 0 0 2.5rem; }
+  p { margin: 0 0 1rem; }
+  strong { color: var(--depth-900); font-weight: 600; }
+  em { color: var(--ink-soft); }
+
+  .lede { font-size: 1.12rem; line-height: 1.55; }
+
+  /* --- the thesis --- */
+  .thesis {
+    background: var(--panel); border: 1px solid var(--rule);
+    border-left: 3px solid var(--depth-700);
+    padding: 1.4rem 1.5rem; margin: 0 0 1.25rem;
+  }
+  .thesis p:last-child { margin-bottom: 0; }
+  .thesis .say {
+    font-family: var(--serif); font-size: 1.15rem; line-height: 1.5;
+    color: var(--depth-900);
+  }
+
+  /* --- numbers --- */
+  .figures {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+  }
+  .figures div { background: var(--panel); padding: .95rem 1rem; }
+  .figures dt {
+    font-size: 1.35rem; font-family: var(--serif); color: var(--depth-700);
+    font-variant-numeric: tabular-nums; line-height: 1.1;
+  }
+  .figures dd {
+    margin: .3rem 0 0; font-size: .78rem; color: var(--ink-soft);
+    letter-spacing: .03em;
+  }
+
+  /* --- pipeline --- */
+  .pipe { display: flex; flex-direction: column; gap: 1px;
+          background: var(--rule); border: 1px solid var(--rule); }
+  .pipe .step {
+    background: var(--panel); padding: .8rem 1rem;
+    display: grid; grid-template-columns: 1.6rem 1fr auto; gap: .85rem;
+    align-items: baseline;
+  }
+  .pipe .n {
+    font-family: var(--serif); color: var(--ink-faint);
+    font-variant-numeric: tabular-nums; font-size: .95rem;
+  }
+  .pipe .what strong { display: block; }
+  .pipe .what span { color: var(--ink-soft); font-size: .9rem; }
+  .tag {
+    font-size: .66rem; letter-spacing: .08em; text-transform: uppercase;
+    padding: .18rem .45rem; white-space: nowrap; font-weight: 600;
+  }
+  .tag.code { background: var(--depth-100); color: var(--depth-700); }
+  .tag.model { background: var(--sand); color: #3a2f20; }
+  :root[data-theme="dark"] .tag.model,
+  .tag.model { }
+  @media (prefers-color-scheme: dark) { .tag.model { color: #f0e6d6; } }
+  :root[data-theme="dark"] .tag.model { color: #f0e6d6; }
+  :root[data-theme="light"] .tag.model { color: #3a2f20; }
+
+  /* --- demo script --- */
+  ol.script { list-style: none; counter-reset: q; padding: 0; margin: 0;
+              display: flex; flex-direction: column; gap: 1.5rem; }
+  ol.script > li { counter-increment: q; display: grid;
+                   grid-template-columns: 2rem 1fr; gap: .9rem; }
+  ol.script > li::before {
+    content: counter(q); font-family: var(--serif); font-size: 1.2rem;
+    color: var(--depth-700); font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+  }
+  .q {
+    font-family: var(--serif); font-size: 1.08rem; color: var(--depth-900);
+    margin: 0 0 .35rem; line-height: 1.35;
+  }
+  .secs { font-size: .74rem; color: var(--ink-faint); letter-spacing: .05em;
+          font-variant-numeric: tabular-nums; }
+  .beat { margin: .5rem 0 0; font-size: .95rem; }
+  .beat b { color: var(--depth-700); font-weight: 600; }
+
+  /* --- Q&A --- */
+  .qa { display: flex; flex-direction: column; gap: 1.4rem; }
+  .qa .ask {
+    font-family: var(--serif); font-size: 1.05rem; color: var(--depth-900);
+    margin: 0 0 .3rem;
+  }
+  .qa p { margin: 0; font-size: .96rem; }
+
+  /* --- warnings --- */
+  .warn {
+    border: 1px solid var(--rule); border-left: 3px solid var(--critical);
+    background: var(--panel); padding: 1.25rem 1.4rem;
+  }
+  .warn h3 { margin-top: 0; color: var(--critical); }
+  .warn ul { margin: 0; padding-left: 1.1rem; }
+  .warn li { margin-bottom: .6rem; font-size: .96rem; }
+  .warn li:last-child { margin-bottom: 0; }
+
+  .caution {
+    border: 1px solid var(--rule); border-left: 3px solid var(--alert);
+    background: var(--panel); padding: 1.25rem 1.4rem; margin: 0 0 1.25rem;
+  }
+  .caution p:last-child { margin-bottom: 0; }
+  .caution strong { color: var(--alert); }
+
+  table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+  .scroll { overflow-x: auto; }
+  th { text-align: left; font-size: .72rem; letter-spacing: .1em;
+       text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
+       padding: 0 .8rem .5rem 0; border-bottom: 1px solid var(--rule); }
+  td { padding: .65rem .8rem .65rem 0; border-bottom: 1px solid var(--rule);
+       vertical-align: top; }
+  td:first-child { color: var(--depth-900); font-weight: 600; white-space: nowrap; }
+
+  code {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: .88em; background: var(--depth-100); color: var(--depth-700);
+    padding: .1em .35em;
+  }
+
+  footer.end {
+    border-top: 1px solid var(--rule); padding-top: 1.5rem;
+    color: var(--ink-faint); font-size: .88rem;
+  }
+  a { color: var(--depth-700); }
+  a:focus-visible, li:focus-visible { outline: 2px solid var(--depth-600); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Team briefing · read before the slot</p>
+    <h1>INGRES: what we built, and how to talk about it</h1>
+    <p>A groundwater assistant for Punjab whose whole design is arranged around one problem — not answering, but never answering wrongly.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section>
+    <h2>The 30-second version</h2>
+    <p class="sub">Every one of us should be able to say this without notes.</p>
+    <div class="thesis">
+      <p class="say">Ask a plain-English question about Punjab groundwater and get an answer built from real CGWB monitoring data — with a chart, a map, and a citation for every figure. The hard part isn't generating an answer. It's never generating a wrong one.</p>
+    </div>
+    <p>If you only remember one thing: <strong>this is a verification system that happens to have a chat box on it.</strong> Most projects at a hackathon will be a language model with a prompt. Ours is a pipeline where the language model is deliberately kept away from anything that matters.</p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>The one idea</h2>
+    <p class="sub">Everything else in the project follows from this.</p>
+    <p>A language model asked about groundwater will produce a fluent, confident, <em>entirely invented</em> figure. So we do three things:</p>
+    <p><strong>Ask the database, not the model.</strong> Numbers come from SQL over real readings — each with a station name and a date attached. The model writes prose <em>around</em> figures it was handed. It never supplies them.</p>
+    <p><strong>Verify with code, not with another model.</strong> We do have a model reviewing the output, but it is advisory only — because during testing it <em>approved</em> an answer citing Kot Shamir, a Bathinda station, as the source for a Ludhiana figure. Eight plain-Python checks run first and can block an answer. They cannot hallucinate, because they don't generate anything.</p>
+    <p><strong>Two sources, chosen deliberately.</strong> The database knows how <em>much</em> water there is. It knows nothing about quality. Quality, causes and methodology come from CGWB's report via semantic search — but numeric questions never go there, because retrieving prose <em>about</em> a figure loses the station and the date that make it checkable.</p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>How it actually works</h2>
+    <p class="sub">Five agents. Three of them involve no model at all — that's the part worth saying out loud.</p>
+    <div class="pipe">
+      <div class="step"><span class="n">1</span><span class="what"><strong>Understand the question</strong><span>Turns it into structured intent. Also resolves "and what about Moga?" against the conversation.</span></span><span class="tag model">model</span></div>
+      <div class="step"><span class="n">2</span><span class="what"><strong>Fetch the data</strong><span>Maps intent to SQL, or to a search over the CGWB report.</span></span><span class="tag code">plain code</span></div>
+      <div class="step"><span class="n">3</span><span class="what"><strong>Do the maths</strong><span>Projects the water table forward. numpy, not the model.</span></span><span class="tag code">plain code</span></div>
+      <div class="step"><span class="n">4</span><span class="what"><strong>Write the prose</strong><span>The only place the model touches the answer.</span></span><span class="tag model">model</span></div>
+      <div class="step"><span class="n">5</span><span class="what"><strong>Check every figure</strong><span>Eight checks over citations, numbers, districts, years, units. Blocking.</span></span><span class="tag code">plain code</span></div>
+    </div>
+    <p style="margin-top:1.1rem">The chart, the map and the citations are built <strong>from the data</strong>, not from anything the model said — because the model was observed leaving both "needs a chart" flags false on questions that obviously wanted one.</p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Numbers worth memorising</h2>
+    <p class="sub">Judges ask for scale. These are all real and all checkable.</p>
+    <div class="scroll">
+      <dl class="figures">
+        <div><dt>36,879</dt><dd>real CGWB readings</dd></div>
+        <div><dt>1,607</dt><dd>monitoring stations</dd></div>
+        <div><dt>1996–2024</dt><dd>years covered</dd></div>
+        <div><dt>23</dt><dd>Punjab districts</dd></div>
+        <div><dt>153</dt><dd>assessment blocks</dd></div>
+        <div><dt>178</dt><dd>report passages indexed</dd></div>
+        <div><dt>8</dt><dd>blocking checks</dd></div>
+        <div><dt>133</dt><dd>tests, all passing</dd></div>
+      </dl>
+    </div>
+    <p style="margin-top:1.1rem"><strong>20 of Punjab's 23 assessed districts are over-exploited.</strong> That single fact is the reason the project exists — lead with it if you need a hook.</p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>The demo, in order</h2>
+    <p class="sub">Roughly 40 seconds of answers, four to five minutes with talking. Order matters — each question adds one new capability.</p>
+
+    <div class="caution">
+      <p><strong>One question at a time.</strong> Nothing queues requests in front of the model. Two at once collapse it — a question that answers in 13 seconds took 183 with a second in flight. If a judge reaches for the keyboard mid-answer, let the current one finish. This is the most likely way the demo goes wrong.</p>
+    </div>
+
+    <p>While each answer works, a list of steps builds on screen — <em>"Retrieved — 22 stations reporting on 2024-01-01"</em>, <em>"Checking every figure — 7 checks over 7 figures"</em>. <strong>Read a line aloud as it appears.</strong> That list is the pipeline, and it's the most convincing thing on the screen.</p>
+
+    <ol class="script">
+      <li>
+        <div>
+          <p class="q">What's the groundwater status in Bathinda? <span class="secs">· 3s</span></p>
+          <p class="beat"><b>Show:</b> the trend chart, drawn as a cross-section with ground filled above the water line.</p>
+          <p class="beat"><b>Say:</b> the Y axis is inverted on purpose — a falling line means a falling water table, which is what people expect.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="q">Which districts in Punjab are over-exploited? <span class="secs">· 5s</span></p>
+          <p class="beat"><b>Show:</b> the map, and the footnote underneath it.</p>
+          <p class="beat"><b>Say:</b> "Malerkotla is categorised but not shown — it has no monitoring stations." It tells you what's missing instead of quietly showing fewer pins.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="q">Which district has the worst water table? <span class="secs">· 4s</span></p>
+          <p class="beat"><b>Show:</b> ranked bars, worst first, the answer at full strength and the rest dimmed.</p>
+          <p class="beat"><b>Say:</b> a superlative names no district, so this has to rank all of them. An earlier version answered it with one of the <em>shallowest</em> — deep water is a low water level, and the wording fooled it.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="q">How many years until Ludhiana hits critical depth? <span class="secs">· 8s</span></p>
+          <p class="beat"><b>Show:</b> the projection, dashed into a shaded future, landing on a marked crossing of the 30 m line.</p>
+          <p class="beat"><b>Say:</b> <strong>CGWB publishes no "critical depth"</strong> — its categories measure extraction against recharge, not metres. 30 m is a pumping limit we state openly, and the answer says so itself. The maths is Python, not the model.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="q">And what about Moga? → Which of those two is worse? <span class="secs">· 4s each</span></p>
+          <p class="beat"><b>Show:</b> it carries the conversation, and the second question compares Bathinda and Moga — not all 23.</p>
+          <p class="beat"><b>Say:</b> this is what makes it a conversation rather than a search box.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="q">Is the water in Bathinda safe to drink? <span class="secs">· 12s</span></p>
+          <p class="beat"><b>Show:</b> the badge flips to <em>CGWB report</em> and the citation becomes a page number.</p>
+          <p class="beat"><b>Say:</b> the database holds no water quality data at all, so this comes from the report instead. Use the slow moment to explain that numbers never go through the document search — retrieving prose about a figure loses the station and the date.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <p class="q">What's the groundwater status in Mumbai? <span class="secs">· 1s</span></p>
+          <p class="beat"><b>Show:</b> a refusal that names its actual scope.</p>
+          <p class="beat"><b>Say:</b> it would rather say no than guess.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>What judges will ask</h2>
+    <p class="sub">Answer with the specific story, not the general claim. Specifics are what make it sound built rather than described.</p>
+
+    <div class="qa">
+      <div>
+        <p class="ask">"How do you know it isn't hallucinating?"</p>
+        <p>The strongest answer we have: during testing, the model produced an answer citing <strong>Kot Shamir</strong> — a Bathinda station — as the source for a <strong>Ludhiana</strong> figure. Our LLM verifier approved it. That's exactly why verification isn't left to a model. Eight plain-Python checks test every citation, figure, district, year and unit against the retrieved data before anything is shown.</p>
+      </div>
+      <div>
+        <p class="ask">"Isn't this just a wrapper around an LLM?"</p>
+        <p>Three of the five agents involve no model at all. Retrieval is a dictionary lookup and SQL, the projection is numpy, and the verification is plain Python. The model understands the question and writes the sentence. It never supplies a number.</p>
+      </div>
+      <div>
+        <p class="ask">"Why a small local model instead of GPT-4?"</p>
+        <p>Deliberate. It runs fully offline — no internet, no API key, no cost — which also means it can't fail on venue wifi. And it's the stronger claim: the guarantees come from the checks, not from the model being good. One line in the config switches it to Claude if anyone wants to see that.</p>
+      </div>
+      <div>
+        <p class="ask">"Where did the risk categories come from — did you make them up?"</p>
+        <p>CGWB categorises <strong>blocks</strong>, never districts, so a district category can't be transcribed — it has to be derived. Ours is the category held by most of the district's blocks, ties broken toward the worse one, and the block counts are stored alongside so an answer can show its working. We cross-checked the extraction against a second table in the same report, which caught four wrong categories on the first attempt.</p>
+      </div>
+      <div>
+        <p class="ask">"What happens when it gets something wrong?"</p>
+        <p>It shows the raw data and says it couldn't verify the wording, rather than showing a confident sentence. An unverifiable answer is never presented as if it were verified.</p>
+      </div>
+      <div>
+        <p class="ask">"Is the data live?"</p>
+        <p>No, and don't imply otherwise. It's CGWB's published monitoring data through 2024, loaded into Postgres. CGWB publishes quarterly, not live.</p>
+      </div>
+      <div>
+        <p class="ask">"Why isn't it deployed?"</p>
+        <p>The network we built on blocks every database port, so the managed database was unreachable during development. Running locally was the lower-risk choice for demo day too — venue wifi usually has the same restrictions. Nothing about the architecture prevents deploying it.</p>
+      </div>
+      <div>
+        <p class="ask">"What doesn't it do?"</p>
+        <p>Answer this one straight — see below. Being able to name your own limits is worth more than pretending there aren't any.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Do not claim these</h2>
+    <p class="sub">A judge who catches one overclaim will discount everything else you said. All of these are things it would be easy to imply by accident.</p>
+    <div class="warn">
+      <h3>Not true, don't say it</h3>
+      <ul>
+        <li><strong>"Real-time data."</strong> It's published CGWB data through 2024.</li>
+        <li><strong>"Works for all of India."</strong> Punjab only — 23 districts. It refuses anything else, and that refusal is a feature worth showing.</li>
+        <li><strong>"It predicts when the water will run out."</strong> It projects a straight line at the measured rate and says explicitly that it assumes the rate holds and ignores policy, rainfall and aquifer behaviour. Call it an order of magnitude, not a forecast.</li>
+        <li><strong>"CGWB says 30 m is critical."</strong> CGWB publishes no depth threshold at all. 30 m is our stated pumping limit. The system itself is careful about this — don't be less careful than it is.</li>
+        <li><strong>"It's never wrong."</strong> It's checked. Those are different claims, and the second one is the impressive one anyway.</li>
+        <li><strong>"Machine learning model."</strong> The trend fitting is a straight-line fit. Don't dress it up.</li>
+      </ul>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Known weaknesses — own them first</h2>
+    <p class="sub">If you raise these before a judge does, they read as self-awareness. If a judge raises them first, they read as gaps.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Weakness</th><th>What to say</th></tr></thead>
+        <tbody>
+          <tr><td>One user at a time</td><td>One model on one machine. Two questions at once and it crawls. A queue is the obvious fix; we didn't need it for a single-user demo.</td></tr>
+          <tr><td>Plain prose</td><td>A 7B model writes plainly. That's the cost of the offline decision, and we took it knowingly.</td></tr>
+          <tr><td>One document</td><td>Semantic search covers one CGWB report. Anything outside it has no source, and it says so rather than guessing.</td></tr>
+          <tr><td>Map needs internet</td><td>Only the map tiles. Everything else runs offline.</td></tr>
+          <tr><td>No multi-hop questions</td><td>"Compare the trend in the three worst districts" is beyond it.</td></tr>
+          <tr><td>Not deployed</td><td>Network constraints during development; runs locally by design.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Roles for the slot</h2>
+    <p class="sub">Decide these before you walk up, not at the laptop.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Role</th><th>Job</th></tr></thead>
+        <tbody>
+          <tr><td>Driver</td><td>Types the questions, one at a time, in the script order. Doesn't talk while typing. Never types while an answer is running.</td></tr>
+          <tr><td>Narrator</td><td>Does the talking. Reads one progress line aloud per question. Owns the Kot Shamir story.</td></tr>
+          <tr><td>Backup</td><td>Watches the health dot. Knows the restart commands. Takes hostile questions so the narrator keeps the thread.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">Everyone should be able to answer <em>"how do you know it isn't hallucinating?"</em> — that question will come, and it's the one the whole project answers.</p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>If something breaks</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>Header dot red</td><td>Backend died. Restart uvicorn.</td></tr>
+          <tr><td>First answer takes ~45s</td><td>Model was cold. Fast from then on — which is why we start 15 minutes early.</td></tr>
+          <tr><td>Everything crawls</td><td>Two requests at once. Wait for the first to finish.</td></tr>
+          <tr><td>Progress list sits on one line</td><td>Not stuck — that step is genuinely the slow one. Keep talking.</td></tr>
+          <tr><td>"Could not produce an answer"</td><td>A guard rejected the draft. Say so out loud: the safeguard just fired, and that <em>is</em> the feature. Then rephrase.</td></tr>
+          <tr><td>Total collapse</td><td>Open <code>/tools/current_level?district=Bathinda</code> in a browser tab. Real data, straight from the API.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="end">
+    <p>Deeper detail lives in the repo: <strong>ARCHITECTURE.md</strong> for how it's built, <strong>DEMO.md</strong> for the runbook, <strong>HANDOFF.md</strong> for what's still weak. Read HANDOFF before claiming anything is finished.</p>
+  </footer>
+
+</div>
+</body>
+</html>

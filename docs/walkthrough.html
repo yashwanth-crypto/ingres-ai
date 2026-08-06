@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<style>
+  /* Standalone reset. The hosted version gets this from its runtime. */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  img { max-width: 100%; height: auto; }
+</style>
+<title>INGRES — how it actually works</title>
+<style>
+  :root {
+    --depth-900: #0b2c34;
+    --depth-700: #164e5b;
+    --depth-600: #1d6473;
+    --depth-100: #d3e7ea;
+    --sand: #c9b79a;
+    --earth: #a08a6d;
+    --alert: #b45309;
+    --critical: #b91c1c;
+    --ground: #faf9f7;
+    --panel: #ffffff;
+    --sunk: #f2efea;
+    --rule: #e4e0da;
+    --ink: #1c1a17;
+    --ink-soft: #6b6560;
+    --ink-faint: #938d86;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --serif: Georgia, Cambria, "Times New Roman", serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --depth-900: #cfe9ee; --depth-700: #7fc2d1; --depth-600: #9ed3de;
+      --depth-100: #1e4d59; --sand: #8a7a63; --earth: #6f6250;
+      --alert: #d98324; --critical: #e06666;
+      --ground: #0e1416; --panel: #141b1e; --sunk: #101719; --rule: #273136;
+      --ink: #e8e4de; --ink-soft: #9aa5a8; --ink-faint: #6d7a7e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --depth-900: #cfe9ee; --depth-700: #7fc2d1; --depth-600: #9ed3de;
+    --depth-100: #1e4d59; --sand: #8a7a63; --earth: #6f6250;
+    --alert: #d98324; --critical: #e06666;
+    --ground: #0e1416; --panel: #141b1e; --sunk: #101719; --rule: #273136;
+    --ink: #e8e4de; --ink-soft: #9aa5a8; --ink-faint: #6d7a7e;
+  }
+  :root[data-theme="light"] {
+    --depth-900: #0b2c34; --depth-700: #164e5b; --depth-600: #1d6473;
+    --depth-100: #d3e7ea; --sand: #c9b79a; --earth: #a08a6d;
+    --alert: #b45309; --critical: #b91c1c;
+    --ground: #faf9f7; --panel: #ffffff; --sunk: #f2efea; --rule: #e4e0da;
+    --ink: #1c1a17; --ink-soft: #6b6560; --ink-faint: #938d86;
+  }
+
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem 5rem; }
+
+  header.masthead {
+    background: linear-gradient(to bottom,
+      #0b2c34 0%, #0b2c34 40%, #164e5b 40%, #164e5b 58%,
+      #c9b79a 58%, #c9b79a 74%, #a08a6d 74%, #8a755a 100%);
+    padding: 3rem 0 0;
+  }
+  header.masthead .wrap { padding-bottom: 2.75rem; }
+  .eyebrow { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase;
+             color: #d3e7ea; opacity: .85; margin: 0 0 .6rem; }
+  header.masthead h1 {
+    font-family: var(--serif); font-weight: 400; color: #fff;
+    font-size: clamp(1.95rem, 5.5vw, 2.8rem); line-height: 1.12;
+    margin: 0 0 .7rem; text-wrap: balance;
+  }
+  header.masthead p { color: #d3e7ea; margin: 0; max-width: 36rem; }
+
+  nav.toc {
+    background: var(--sunk); border-bottom: 1px solid var(--rule);
+    padding: 1.1rem 0 1.2rem; margin-bottom: 2.75rem;
+  }
+  nav.toc ol { margin: 0; padding: 0; list-style: none; counter-reset: t;
+               display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+               gap: .3rem 1.5rem; }
+  nav.toc li { counter-increment: t; font-size: .9rem; }
+  nav.toc li::before { content: counter(t) ". "; color: var(--ink-faint);
+                       font-variant-numeric: tabular-nums; }
+  nav.toc a { color: var(--depth-700); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+
+  section { margin: 0 0 3.25rem; scroll-margin-top: 1rem; }
+  h2 {
+    font-family: var(--serif); font-weight: 400; font-size: 1.6rem;
+    line-height: 1.2; color: var(--depth-900); margin: 0 0 .35rem;
+    text-wrap: balance;
+  }
+  h2 .num { color: var(--ink-faint); font-size: 1.1rem; margin-right: .5rem;
+            font-variant-numeric: tabular-nums; }
+  h2 + .sub { color: var(--ink-soft); margin: 0 0 1.5rem; font-size: .95rem; }
+  h3 { font-family: var(--serif); font-weight: 400; font-size: 1.15rem;
+       color: var(--depth-900); margin: 2rem 0 .6rem; }
+  p { margin: 0 0 1rem; }
+  strong { color: var(--depth-900); font-weight: 600; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 0 0 2.75rem; }
+
+  code { font-family: var(--mono); font-size: .87em;
+         background: var(--depth-100); color: var(--depth-700); padding: .1em .35em; }
+  pre { background: var(--sunk); border: 1px solid var(--rule);
+        padding: .9rem 1rem; overflow-x: auto; margin: 0 0 1.1rem;
+        font-family: var(--mono); font-size: .84rem; line-height: 1.55; }
+  pre code { background: none; color: var(--ink); padding: 0; }
+  .cmt { color: var(--ink-faint); }
+  .key { color: var(--depth-700); }
+  .val { color: var(--alert); }
+
+  .note {
+    border-left: 3px solid var(--depth-700); background: var(--panel);
+    border: 1px solid var(--rule); border-left: 3px solid var(--depth-700);
+    padding: 1.1rem 1.25rem; margin: 0 0 1.2rem;
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .note .lbl { font-size: .7rem; letter-spacing: .11em; text-transform: uppercase;
+               color: var(--depth-700); font-weight: 600; display: block;
+               margin-bottom: .4rem; }
+  .bug { border-left-color: var(--critical); }
+  .bug .lbl { color: var(--critical); }
+
+  .scroll { overflow-x: auto; margin: 0 0 1.2rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .91rem; }
+  th { text-align: left; font-size: .7rem; letter-spacing: .1em;
+       text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
+       padding: 0 .85rem .5rem 0; border-bottom: 1px solid var(--rule);
+       white-space: nowrap; }
+  td { padding: .6rem .85rem .6rem 0; border-bottom: 1px solid var(--rule);
+       vertical-align: top; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap;
+         color: var(--depth-700); font-weight: 600; }
+  td:first-child { color: var(--depth-900); }
+
+  /* flow diagram */
+  .flow { display: flex; flex-direction: column; gap: 1px;
+          background: var(--rule); border: 1px solid var(--rule); margin: 0 0 1.2rem; }
+  .flow .row { background: var(--panel); padding: .85rem 1rem;
+               display: grid; grid-template-columns: 1.4rem 1fr auto; gap: .85rem;
+               align-items: baseline; }
+  .flow .row.sunk { background: var(--sunk); }
+  .flow .n { font-family: var(--serif); color: var(--ink-faint);
+             font-variant-numeric: tabular-nums; font-size: .92rem; }
+  .flow strong { display: block; font-size: .97rem; }
+  .flow span.d { color: var(--ink-soft); font-size: .88rem; }
+  .pill { font-size: .64rem; letter-spacing: .08em; text-transform: uppercase;
+          padding: .18rem .45rem; font-weight: 700; white-space: nowrap; }
+  .pill.code { background: var(--depth-100); color: var(--depth-700); }
+  .pill.model { background: var(--sand); color: #33291b; }
+  :root[data-theme="dark"] .pill.model { color: #f2e9db; }
+  @media (prefers-color-scheme: dark) { .pill.model { color: #f2e9db; } }
+  :root[data-theme="light"] .pill.model { color: #33291b; }
+
+  ul.tight { margin: 0 0 1.1rem; padding-left: 1.15rem; }
+  ul.tight li { margin-bottom: .45rem; }
+
+  footer.end { border-top: 1px solid var(--rule); padding-top: 1.5rem;
+               color: var(--ink-faint); font-size: .88rem; }
+  a { color: var(--depth-700); }
+  a:focus-visible { outline: 2px solid var(--depth-600); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Technical walkthrough</p>
+    <h1>INGRES: how a question becomes a checked answer</h1>
+    <p>Every layer, in the order data moves through it — from 36,879 CGWB readings in Postgres to a sentence nobody had to take on trust.</p>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="wrap">
+    <ol>
+      <li><a href="#shape">The shape of the system</a></li>
+      <li><a href="#data">What is in the database</a></li>
+      <li><a href="#sources">Two knowledge sources</a></li>
+      <li><a href="#trace">One question, traced</a></li>
+      <li><a href="#agents">The agents, one by one</a></li>
+      <li><a href="#sql">What the SQL really does</a></li>
+      <li><a href="#rag">How the document search works</a></li>
+      <li><a href="#checks">The eight checks</a></li>
+      <li><a href="#fail">Every way it can fail</a></li>
+      <li><a href="#front">What the browser does</a></li>
+    </ol>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <section id="shape">
+    <h2><span class="num">1</span>The shape of the system</h2>
+    <p class="sub">Four layers. Each one only talks to the layer below it.</p>
+
+    <div class="flow">
+      <div class="row"><span class="n">A</span><span><strong>Data</strong><span class="d">Postgres — four tables. Plus a committed vector index for the CGWB report.</span></span></div>
+      <div class="row"><span class="n">B</span><span><strong>Services</strong><span class="d"><code>groundwater_service</code> holds every SQL query; <code>rag_service</code> holds document search; <code>llm_client</code> is the only place a model is called.</span></span></div>
+      <div class="row"><span class="n">C</span><span><strong>Agents</strong><span class="d">Six small modules, wired by an orchestrator. This is where a question becomes an answer.</span></span></div>
+      <div class="row"><span class="n">D</span><span><strong>API + browser</strong><span class="d">FastAPI exposes the pipeline twice — plain and streaming — and React renders it.</span></span></div>
+    </div>
+
+    <p>The important structural decision is that <strong>the service layer has no FastAPI imports at all</strong>. The agents call the SQL functions directly as Python. Nothing loops back out over HTTP to talk to itself, so there is one code path to a number rather than two.</p>
+
+    <div class="note">
+      <span class="lbl">The invariant everything depends on</span>
+      <p><code>water_level_m</code> is <strong>depth to water, in metres below ground</strong>. A larger number means the water is deeper down, which is <em>worse</em>. So a <em>positive</em> trend is depletion, and the "deepest" water table is the "lowest" water level.</p>
+      <p>That inversion has caused more bugs in this project than anything else — it is why the trend chart's Y axis is flipped, and why the ranking field is called <code>worst</code>/<code>best</code> rather than <code>highest</code>/<code>lowest</code>.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="data">
+    <h2><span class="num">2</span>What is in the database</h2>
+    <p class="sub">Four tables. Two hold measurements; two hold CGWB's assessment.</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Table</th><th>Rows</th><th>What it holds</th></tr></thead>
+        <tbody>
+          <tr><td><code>stations</code></td><td class="n">1,607</td><td>Name, district, latitude, longitude. Unique on (name, district).</td></tr>
+          <tr><td><code>readings</code></td><td class="n">36,879</td><td>One water-level measurement, with a date. Unique on (station, date).</td></tr>
+          <tr><td><code>risk_categories</code></td><td class="n">23</td><td>One derived category per district, plus the block counts behind it.</td></tr>
+          <tr><td><code>assessment_blocks</code></td><td class="n">153</td><td>CGWB's actual unit of assessment: block, extraction %, category.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Those two unique constraints are not decoration. Without them, running the ingestion script a second time silently doubles every row and every average in the system quietly becomes wrong. With them, re-running is a no-op.</p>
+
+    <h3>Why <code>risk_categories</code> is the interesting table</h3>
+    <p><strong>CGWB categorises blocks, never districts.</strong> There is no official "Ludhiana is over-exploited" anywhere in their publication — only 14 individual block assessments. A district-level category therefore cannot be transcribed; it has to be <em>derived</em>.</p>
+    <p>The rule: the category held by most of the district's blocks, ties broken toward the worse category. That is a modelling choice, so the block counts are stored alongside it — which is why an answer can say "14 of 14 blocks over-exploited" rather than just asserting a label.</p>
+
+    <div class="note bug">
+      <span class="lbl">What that cost to get right</span>
+      <p>An earlier extraction read the wrong table in the report and produced <strong>four wrong categories</strong> — rows spanning a page break paired a 2024 percentage with a 2023 label, marking a block over-exploited at 66% extraction. It was caught by cross-checking against a second, independent table in the same report. Both tables now agree for all 23 districts.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="sources">
+    <h2><span class="num">3</span>Two knowledge sources, and the rule that separates them</h2>
+    <p class="sub">This is the single most important design decision in the project.</p>
+
+    <p>The database knows <strong>how much</strong> water there is. It contains no water quality data whatsoever — no uranium, no nitrate, no salinity. Those live in CGWB's published report, which is indexed for semantic search.</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Question</th><th>Source</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>"Level in Bathinda?"</td><td>Postgres</td><td>An exact figure with a station and a date</td></tr>
+          <tr><td>"How fast is it falling?"</td><td>Postgres</td><td>Computed from readings</td></tr>
+          <tr><td>"Is it safe to drink?"</td><td>Report</td><td>The database has no quality data at all</td></tr>
+          <tr><td>"Why is it falling?"</td><td>Report</td><td>An explanation, not a measurement</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>A numeric question must never go to the document search.</strong> Retrieving prose <em>about</em> a figure loses the station and the date — the two things that make the figure checkable. A passage saying "levels have fallen sharply in central Punjab" cannot be verified against anything; a row saying <code>18.15 m at Basian Bet M on 2024-01-01</code> can.</p>
+  </section>
+
+  <hr>
+
+  <section id="trace">
+    <h2><span class="num">4</span>One question, traced all the way</h2>
+    <p class="sub">"How many years until Ludhiana hits critical depth?" — with the real values it produces.</p>
+
+    <h3>Step 1 — Understanding <span class="pill model">model</span></h3>
+    <p>The question, plus up to four previous turns, goes to the model with a schema attached. Ollama constrains decoding to that JSON Schema, so the reply is valid by construction rather than parsed hopefully:</p>
+<pre><code>{ <span class="key">"intent"</span>: <span class="val">"years_to_critical"</span>, <span class="key">"district"</span>: <span class="val">"Ludhiana"</span> }</code></pre>
+    <p>The district is then <strong>re-canonicalised in Python</strong>. The model is not trusted to spell it — a near-miss would reach SQL and silently return nothing.</p>
+
+    <h3>Step 2 — Retrieval <span class="pill code">no model</span></h3>
+    <p>A dictionary lookup, not a decision. <code>years_to_critical</code> maps to three service calls, and they return:</p>
+<pre><code><span class="key">current_level</span>   18.15 m at Basian Bet M, 2024-01-01
+               22 stations reporting, district mean <span class="val">19.88 m</span>
+<span class="key">depletion_rate</span>  <span class="val">0.504 m/year</span>, median of 75 station trends
+<span class="key">risk_category</span>   over-exploited, 14 of 14 blocks</code></pre>
+
+    <h3>Step 3 — Calculation <span class="pill code">no model</span></h3>
+    <p>Plain arithmetic over those numbers:</p>
+<pre><code>(30.0 − 19.88) ÷ 0.504  =  <span class="val">20.1 years</span>
+2024 + 20.1             →  reaches 30 m around <span class="val">2044</span></code></pre>
+    <p>The 30 m is a <strong>stated pumping limit, not a CGWB threshold</strong> — CGWB publishes no depth threshold at all. The agent attaches that caveat to its own output so the answer cannot quietly drop it.</p>
+
+    <div class="note bug">
+      <span class="lbl">Why the year is computed here and not by the model</span>
+      <p>It used to be left as arithmetic for the model, which wrote <em>"approximately 20 years (2034)"</em>. The span was right and the year was invented. Now the pipeline states the year, and a check verifies whatever the model writes.</p>
+    </div>
+
+    <h3>Step 4 — Response <span class="pill model">model</span></h3>
+    <p>The model receives the data as JSON and writes prose around it. Before it does, two things happen to that JSON:</p>
+    <ul class="tight">
+      <li><strong>Bulk is stripped.</strong> A 75-name station list becomes <code>[75 stations]</code> — the model never cites them individually.</li>
+      <li><strong>Some fields are withheld.</strong> Shown a field called <code>projected_year</code>, the model cited the field name as if it were a source: <em>"(projected_year: 2044)"</em>. The checks need that field; the model does not get to see it.</li>
+    </ul>
+
+    <h3>Step 5 — Verification <span class="pill code">code first</span></h3>
+    <p>Eight plain-Python checks run against the retrieved data — covered in full in <a href="#checks">section 8</a>. Then a model reviews for nuance, but only advisory: it can trigger one rewrite, never a block.</p>
+
+    <h3>Step 6 — Assembly <span class="pill code">no model</span></h3>
+    <p>Citations, chart and map are built <strong>from the data</strong>, not from anything the model said. The model has flags for "this needs a chart" and it left them false on questions that obviously wanted one, so the decision is a rule keyed on intent instead.</p>
+  </section>
+
+  <hr>
+
+  <section id="agents">
+    <h2><span class="num">5</span>The agents, one by one</h2>
+    <p class="sub">Six modules. Two call a model for the answer; one calls a model to review it; three never call one at all.</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Agent</th><th>In → out</th><th>Model?</th></tr></thead>
+        <tbody>
+          <tr><td>Query understanding</td><td>Text + history → structured intent</td><td>yes</td></tr>
+          <tr><td>Retrieval</td><td>Intent → rows or passages</td><td>no</td></tr>
+          <tr><td>Calculation</td><td>Rows → projection + caveats</td><td>no</td></tr>
+          <tr><td>Response</td><td>Data → prose</td><td>yes</td></tr>
+          <tr><td>Grounding</td><td>Prose + data → list of faults</td><td>no</td></tr>
+          <tr><td>Verification</td><td>Prose + data → advisory verdict</td><td>yes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>The orchestrator wires them together and owns every decision about what the user finally sees. It is also where the failure paths live — see <a href="#fail">section 9</a>.</p>
+
+    <h3>Follow-up questions</h3>
+    <p>The last four turns are passed to query understanding as context, which is enough for <em>"and what about Moga?"</em> or <em>"how fast is it falling there?"</em> to resolve. One shape needed more than context:</p>
+    <div class="note bug">
+      <span class="lbl">The bug that shape caused</span>
+      <p>After discussing Bathinda and Moga, <em>"which of those two is worse?"</em> was classified as a ranking, measured against all 23 districts, and answered <strong>Barnala</strong> — a district nobody had mentioned. It passed verification, because Barnala genuinely is in the ranking data.</p>
+      <p>A superlative pointing back at the conversation is now converted to a comparison of the districts already discussed — but only when the question names no district of its own and recent turns named between two and four.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="sql">
+    <h2><span class="num">6</span>What the SQL really does</h2>
+    <p class="sub">Two queries carry most of the system. Both are more careful than they look.</p>
+
+    <h3>Current level</h3>
+    <p>Find the latest reading date in the district, take every station reporting on that date, then — and this is the part worth knowing — <strong>cite the station nearest the district mean</strong>, not an arbitrary one. A district's answer should quote a representative well rather than whichever row came back first.</p>
+    <p>It returns the cited station <em>and</em> the district mean <em>and</em> how many stations reported, so an answer can show the single reading in context.</p>
+
+    <h3>Depletion rate</h3>
+    <p>Not one line through all pooled readings. Each station is fitted <strong>separately</strong> with <code>numpy.polyfit</code>, and the <strong>median</strong> of those slopes is reported.</p>
+    <p>Why: stations rotate in and out of CGWB's network over the years. Pooling every reading lets a handful of unusually deep wells that only appear in recent years dominate the slope and manufacture a trend that isn't there.</p>
+    <p>A station qualifies only with <strong>8 or more readings spanning at least 3 years</strong>. Roughly a quarter of Punjab's stations fail that. If <em>nothing</em> qualifies, relaxed thresholds (4 readings, 2 years) are tried — and the answer discloses that it had to.</p>
+<pre><code><span class="cmt"># what comes back for Ludhiana</span>
+rate_m_per_year   <span class="val">0.504</span>
+stations_used     75 stations
+confidence_note   "Median of 75 station trends fitted over
+                   2009-01-01 to present; 66 of 75 stations
+                   show a falling water table."</code></pre>
+    <p>That <code>confidence_note</code> is written by the service, not the model, and the response agent is instructed to reflect its substance.</p>
+  </section>
+
+  <hr>
+
+  <section id="rag">
+    <h2><span class="num">7</span>How the document search works</h2>
+    <p class="sub">178 passages from one CGWB report, and a rerank that knows what each one is about.</p>
+
+    <p>The report's narrative chapters — printed pages 1 to 78 — are split into overlapping ~900-character passages and embedded locally with <code>nomic-embed-text</code>. The vectors are normalised once at build time, so searching is a plain dot product over a 534 KB matrix. There is no vector database.</p>
+
+    <h3>Every passage declares what it is</h3>
+<pre><code>{ <span class="key">"page"</span>: 58,
+  <span class="key">"section"</span>: <span class="val">"Fluoride"</span>,
+  <span class="key">"districts"</span>: [<span class="val">"Bathinda"</span>, <span class="val">"Mansa"</span>, ...],
+  <span class="key">"scope"</span>: <span class="val">"district"</span>,          <span class="cmt"># or "statewide"</span>
+  <span class="key">"text"</span>: "..." }</code></pre>
+
+    <p>Retrieval takes the twelve closest passages by similarity, then <strong>reorders them deterministically</strong>: a passage scoped to the district being asked about is promoted; one scoped to a <em>different</em> district is demoted hard. A passage naming more than six districts is a survey of the state, not a local report, so it is marked statewide and left alone.</p>
+
+    <div class="note bug">
+      <span class="lbl">Two real defects this replaced</span>
+      <p><strong>Every citation was nine pages out.</strong> The report's printed page numbering runs nine behind the PDF's, and passages cited the PDF index. A fluoride passage was cited as page 67 — which is the <em>Iron</em> section. Plausible-looking, wrong contaminant.</p>
+      <p><strong>A quarter of the corpus was not the report.</strong> The indexed range ran past the narrative into twelve pages of government notifications and fourteen of plates and figures, whose extracted "text" is chart axis labels like <code>FIGURE-7 / 75.18% / 2.61%</code>. Those were competing with the actual chapters for retrieval.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="checks">
+    <h2><span class="num">8</span>The eight checks</h2>
+    <p class="sub">Plain Python over the retrieved data. They cannot hallucinate, because they do not generate anything. Every one of them exists because something got through.</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>#</th><th>What it requires</th><th>What got through without it</th></tr></thead>
+        <tbody>
+          <tr><td class="n">1</td><td>Every parenthesised citation names something in the data</td><td>A Bathinda station cited as the source for a Ludhiana figure — and the model reviewer approved it</td></tr>
+          <tr><td class="n">2</td><td>Every figure matches a value in the data</td><td>Invented numbers that read plausibly</td></tr>
+          <tr><td class="n">3</td><td>Every district named is one the data covers</td><td>Answers drifting to a neighbouring district</td></tr>
+          <tr><td class="n">4</td><td>A non-official threshold is not credited to CGWB</td><td>"the 30 m threshold set by CGWB" — CGWB sets no such threshold</td></tr>
+          <tr><td class="n">5</td><td>A projected year is the year the data computed</td><td>"approximately 20 years (2034)" when the projection gives 2044</td></tr>
+          <tr><td class="n">6</td><td>A figure with a unit matches a value <em>of that unit</em></td><td>"a reference depth of 20.1 metres" — 20.1 is the number of <em>years</em></td></tr>
+          <tr><td class="n">7</td><td>A percentage tied to a district comes from a sentence tying them</td><td>"In Bathinda, 13.9% of samples…" — a Punjab-wide figure</td></tr>
+          <tr><td class="n">8</td><td>A count of Punjab's districts is Punjab's real one</td><td>"2 of Punjab's 3 assessed districts" — Punjab has 23</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="lbl">The pattern in checks 5 through 8</span>
+      <p>The first four ask <em>is this number in the data?</em> That is not enough. In a projection answer <strong>every</strong> number is in the data somewhere — so the model can pick up a real figure and attach it to the wrong claim, and a membership test sees nothing wrong.</p>
+      <p><code>20.1</code> is real; it is a count of years, and the sentence called it a depth. <code>13.9%</code> is real; it is Punjab's, and the sentence gave it to Bathinda. <code>3</code> is real; it counts the districts compared, and the sentence called them all of Punjab. <strong>Being in the data is not the same as measuring what the sentence says it measures.</strong></p>
+    </div>
+
+    <h3>Why the model reviewer is only advisory</h3>
+    <p>It catches nuance rules cannot — a dropped caveat, a projection stated as certainty. But it also objects to figures that are genuinely present, so it triggers one rewrite rather than a block. And if that rewrite introduces a grounding failure the original never had, the rewrite is discarded and the first draft kept. An advisory reviewer must not be able to veto a correct answer.</p>
+  </section>
+
+  <hr>
+
+  <section id="fail">
+    <h2><span class="num">9</span>Every way it can fail, and what happens</h2>
+    <p class="sub">Six distinct paths. None of them shows an unverified answer as if it were verified.</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>What went wrong</th><th>What the user gets</th></tr></thead>
+        <tbody>
+          <tr><td>Question is out of scope</td><td>A refusal naming the system's actual coverage</td></tr>
+          <tr><td>Question is about water quality, from the database path</td><td>A refusal explaining that an extraction category says nothing about drinking safety</td></tr>
+          <tr><td>District is real but has no readings <em>(Malerkotla)</em></td><td>Its category, and a plain statement that no readings exist</td></tr>
+          <tr><td>Grounding rejects the draft, twice</td><td>The retrieved figures printed raw, with the reason, flagged unverified</td></tr>
+          <tr><td>Model returns unparseable output three times</td><td>The retrieved data, shown rather than an apology — a rambling model has not made the data worse</td></tr>
+          <tr><td>Model is unreachable</td><td>An error that says so, and suggests rephrasing</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="lbl">Worth knowing about the model itself</span>
+      <p><code>temperature: 0</code> does not mean deterministic here. The same prompt returned 91 tokens once and ran to its 2,048-token cap the next time, truncated mid-string and unparseable. So there are three attempts: more room, then a different sample to break a repetition loop that greedy decoding cannot escape.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section id="front">
+    <h2><span class="num">10</span>What the browser does with the answer</h2>
+    <p class="sub">The response carries five things, and the interface renders each of them.</p>
+
+<pre><code>{ <span class="key">"answer"</span>:      "...prose...",
+  <span class="key">"citations"</span>:   [ { station, date }, ... ],
+  <span class="key">"chart_data"</span>:  { type: <span class="val">"line"</span> | <span class="val">"bars"</span>, ... } | null,
+  <span class="key">"map_data"</span>:    { points, not_plotted } | null,
+  <span class="key">"verified"</span>:    true | false,
+  <span class="key">"source"</span>:      <span class="val">"database"</span> | <span class="val">"report"</span> }</code></pre>
+
+    <ul class="tight">
+      <li><strong>A line chart</strong> for one district over time, drawn as a cross-section with the ground filled in above the water table — and the Y axis inverted, so a falling line means falling water.</li>
+      <li><strong>Ranked bars</strong> when several districts are compared, coloured by CGWB category, with the answering district at full strength and the rest dimmed.</li>
+      <li><strong>A map</strong> for several districts, which names any district it could not plot rather than quietly showing fewer pins.</li>
+      <li><strong>A footer</strong> stating that every figure was checked, which source answered, and what backed it.</li>
+    </ul>
+
+    <h3>The progress stream</h3>
+    <p>Answering takes 3 to 15 seconds. Rather than one blob at the end, the pipeline reports each step as it reaches it — <em>"Retrieved — 22 stations reporting on 2024-01-01"</em>, <em>"Checking every figure — 7 checks over 7 figures"</em> — with the first event landing about 7 ms after asking.</p>
+    <p>Both endpoints run <strong>the same generator</strong>: the plain one consumes it and returns whatever it ends with. Two code paths answering one question differently is exactly the bug this project keeps finding, so there is only one.</p>
+    <p>The draft itself is deliberately <strong>not</strong> streamed word by word. That would mean showing figures the checks may be about to reject — and given the model sometimes rambles to 21,000 characters before failing, a reader would watch it happen.</p>
+  </section>
+
+  <footer class="end">
+    <p>The repo carries the same material in more detail: <strong>ARCHITECTURE.md</strong> file by file, <strong>DEMO.md</strong> for the runbook, <strong>HANDOFF.md</strong> for what is still weak. 133 tests cover the deterministic parts — <code>cd backend &amp;&amp; python -m pytest tests/</code>.</p>
+  </footer>
+
+</div>
+</body>
+</html>
