@@ -186,9 +186,17 @@ def main():
             x, y = px(sh.left), px(sh.top)
             w, h = px(sh.width), px(sh.height)
             if sh.shape_type == MSO_SHAPE_TYPE.PICTURE:
-                d.rectangle([x, y, x + w, y + h], fill=(232, 232, 232))
-                d.text((x + 6, y + 6), "[logo]", font=fnt("Calibri", 9, False),
-                       fill=(140, 140, 140))
+                # Paste the real bytes. A grey stand-in hid whether the map was
+                # placed correctly, which is the whole reason for looking.
+                try:
+                    import io
+                    pic = Image.open(io.BytesIO(sh.image.blob)).convert("RGB")
+                    pic = pic.resize((max(int(w), 1), max(int(h), 1)))
+                    img.paste(pic, (int(x), int(y)))
+                except Exception:
+                    d.rectangle([x, y, x + w, y + h], fill=(232, 232, 232))
+                    d.text((x + 6, y + 6), "[image]", font=fnt("Calibri", 9, False),
+                           fill=(140, 140, 140))
                 continue
             draw_shape(d, sh, x, y, w, h)
             draw_text(d, sh, x, y, w, h)

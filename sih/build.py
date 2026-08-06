@@ -422,38 +422,61 @@ line(tf, "Environmental", size=10.5, bold=True, color=DEPTH_900, space_before=5,
 bullet(tf, "Makes a slow crisis visible: 20 of 23 assessed districts are over-exploited")
 bullet(tf, "Trend and projection views turn depletion into something a non-specialist can see")
 
-# --- diagram: the districts, plotted from their real station coordinates ---
+# --- map: district markers over the monitoring network's own outline ---
 data = json.loads((HERE / "districts.json").read_text())
-MX, MY, MW, MH = 7.4, 1.55, 5.4, 4.15
+proj = json.loads((HERE / "punjab.json").read_text())
+
+MX, MY, MW, MH = 7.4, 1.4, 5.4, 5.05
 box(s5, MSO_SHAPE.RECTANGLE, MX, MY, MW, MH, PAPER)
-caption(s5, MX + 0.15, MY + 0.12, MW - 0.3,
+caption(s5, MX + 0.18, MY + 0.13, MW - 0.36,
         "PUNJAB, BY CGWB CATEGORY", size=9, color=DEPTH_700, bold=True)
 
-lats = [p["lat"] for p in data["points"]]
-lons = [p["lon"] for p in data["points"]]
-lat0, lat1 = min(lats), max(lats)
-lon0, lon1 = min(lons), max(lons)
-pad, dot = 0.55, 0.17
-px0, py0 = MX + pad, MY + 0.55
-pw_, ph_ = MW - pad * 2, MH - 1.35
+# Sized by height, not width: cropped to the landmass the map is portrait,
+# and fitting it to the panel's width ran it through the footer.
+IMG_Y, IMG_H = 1.76, 3.62
+IMG_W = IMG_H * proj["w"] / proj["h"]
+IMG_X = MX + (MW - IMG_W) / 2
+s5.shapes.add_picture(str(HERE / "punjab.png"), Inches(IMG_X), Inches(IMG_Y),
+                      Inches(IMG_W), Inches(IMG_H))
+
+
+def place(lat, lon):
+    """District coordinate -> slide inches, using the map's own projection."""
+    fx = (proj["ox"] + (lon - proj["lon0"]) * proj["kx"] * proj["scale"]) / proj["w"]
+    fy = (proj["oy"] + (proj["lat1"] - lat) * proj["scale"]) / proj["h"]
+    return IMG_X + fx * IMG_W, IMG_Y + fy * IMG_H
+
+
 COLOR = {"over-exploited": CRITICAL, "safe": SAFE}
+dot = 0.155
 for p in data["points"]:
-    fx = (p["lon"] - lon0) / (lon1 - lon0)
-    fy = (p["lat"] - lat0) / (lat1 - lat0)
-    cx = px0 + fx * (pw_ - dot)
-    cy = py0 + (1 - fy) * (ph_ - dot)
-    box(s5, MSO_SHAPE.OVAL, cx, cy, dot, dot,
+    cx, cy = place(p["lat"], p["lon"])
+    box(s5, MSO_SHAPE.OVAL, cx - dot / 2, cy - dot / 2, dot, dot,
         COLOR.get(p["c"], EARTH), outline=WHITE)
 
-ly = MY + MH - 0.62
-for i, (lbl, col, n) in enumerate([("Over-exploited", CRITICAL, 20), ("Safe", SAFE, 3)]):
-    box(s5, MSO_SHAPE.OVAL, MX + 0.3 + i * 2.35, ly, 0.13, 0.13, col)
-    caption(s5, MX + 0.48 + i * 2.35, ly - 0.03, 2.0, f"{lbl} — {n} districts",
-            size=9, color=INK)
-caption(s5, MX + 0.3, ly + 0.26, MW - 0.6,
-        "Each dot is a district, placed by the mean coordinate of its monitoring "
-        "stations. Malerkotla is categorised but has no stations, so it is named "
-        "rather than plotted.", size=7.5, color=INK_SOFT)
+# Name the three exceptions. Everything else is the same colour and the same
+# story, and 23 labels would bury the map.
+for p in data["points"]:
+    if p["c"] != "safe":
+        continue
+    cx, cy = place(p["lat"], p["lon"])
+    caption(s5, cx - 0.72, cy + 0.07, 1.5, p["d"], size=7, color=DEPTH_900,
+            bold=True, align=PP_ALIGN.CENTER)
+
+ly = MY + MH - 0.92
+for i, (lbl, col, n) in enumerate([("Over-exploited — 20", CRITICAL, 20),
+                                   ("Safe — 3", SAFE, 3)]):
+    box(s5, MSO_SHAPE.OVAL, MX + 0.3 + i * 2.5, ly, 0.13, 0.13, col)
+    caption(s5, MX + 0.5 + i * 2.5, ly - 0.035, 2.2, lbl, size=9, color=INK)
+box(s5, MSO_SHAPE.OVAL, MX + 0.3, ly + 0.26, 0.09, 0.09,
+    RGBColor(0x60, 0x7A, 0x80))
+caption(s5, MX + 0.5, ly + 0.21, 4.6,
+        "1,606 monitoring stations — the outline is their own coverage",
+        size=8.5, color=INK_SOFT)
+
+caption(s5, MX + 0.3, ly + 0.53, MW - 0.6,
+        "Malerkotla is categorised by CGWB but has no monitoring stations, so it "
+        "is named here rather than plotted.", size=7.5, color=INK_SOFT)
 
 # ================================================ 6 · research & references ===
 s6 = S[5]
