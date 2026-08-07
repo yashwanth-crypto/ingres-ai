@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<style>*,*::before,*::after{box-sizing:border-box}html{-webkit-text-size-adjust:100%}</style>
+<title>INGRES — the flow of a question</title>
+<style>
+  :root {
+    --code: #164e5b;      /* stages with no language model */
+    --llm: #9a7f52;       /* stages that call one */
+    --exit: #b45309;      /* the answer stops early */
+    --ok: #15803d;        /* verified */
+    --ground: #faf9f7;
+    --panel: #ffffff;
+    --rule: #e4e0da;
+    --ink: #1c1a17;
+    --ink-soft: #6b6560;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --serif: Georgia, Cambria, "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --code: #7fc2d1; --llm: #d8bb84; --exit: #e0a45c; --ok: #6bbd85;
+      --ground: #0e1416; --panel: #141b1e; --rule: #273136;
+      --ink: #e8e4de; --ink-soft: #9aa5a8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --code: #7fc2d1; --llm: #d8bb84; --exit: #e0a45c; --ok: #6bbd85;
+    --ground: #0e1416; --panel: #141b1e; --rule: #273136;
+    --ink: #e8e4de; --ink-soft: #9aa5a8;
+  }
+  :root[data-theme="light"] {
+    --code: #164e5b; --llm: #9a7f52; --exit: #b45309; --ok: #15803d;
+    --ground: #faf9f7; --panel: #ffffff; --rule: #e4e0da;
+    --ink: #1c1a17; --ink-soft: #6b6560;
+  }
+
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 62rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  h1 {
+    font-family: var(--serif); font-weight: 400; font-size: clamp(1.7rem, 4vw, 2.3rem);
+    margin: 0 0 .4rem; color: var(--ink); text-wrap: balance;
+  }
+  .sub { color: var(--ink-soft); margin: 0 0 2rem; max-width: 40rem; }
+
+  figure { margin: 0 0 2rem; }
+  svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  figcaption {
+    color: var(--ink-soft); font-size: .9rem; margin-top: 1rem;
+    padding-top: .9rem; border-top: 1px solid var(--rule);
+  }
+
+  .key { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0 0 1.75rem; }
+  .key span { display: flex; align-items: center; gap: .5rem; font-size: .85rem; }
+  .chip { width: 1rem; height: .7rem; border-radius: 2px; border: 1.5px solid; }
+
+  h2 {
+    font-family: var(--serif); font-weight: 400; font-size: 1.3rem;
+    margin: 2.5rem 0 .5rem; color: var(--ink);
+  }
+  p { margin: 0 0 1rem; }
+  strong { font-weight: 600; }
+  code {
+    font-family: ui-monospace, Consolas, monospace; font-size: .87em;
+    background: var(--rule); padding: .1em .35em; border-radius: 2px;
+  }
+  ul { margin: 0 0 1rem; padding-left: 1.2rem; }
+  li { margin-bottom: .5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>What happens when you ask a question</h1>
+  <p class="sub">The whole path, including the three ways it can stop early. Every box is a real step in the code — nothing here is a simplification for the diagram's sake.</p>
+
+  <div class="key">
+    <span><i class="chip" style="border-color:var(--llm);background:color-mix(in srgb,var(--llm) 18%,transparent)"></i> calls a language model</span>
+    <span><i class="chip" style="border-color:var(--code);background:color-mix(in srgb,var(--code) 15%,transparent)"></i> plain code — no model</span>
+    <span><i class="chip" style="border-color:var(--exit);background:color-mix(in srgb,var(--exit) 15%,transparent)"></i> stops early</span>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 880 1010" role="img"
+         aria-label="Flow of a question through INGRES: query understanding, retrieval from either the database or the report, calculation, response, eight checks, and assembly — with early exits for out-of-scope questions and for answers that cannot be verified.">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7"
+                markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+        </marker>
+        <marker id="ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7"
+                markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--exit)"/>
+        </marker>
+      </defs>
+
+      <style>
+        .b  { rx:6; stroke-width:1.6; }
+        .cd { fill:color-mix(in srgb,var(--code) 13%,transparent); stroke:var(--code); }
+        .ml { fill:color-mix(in srgb,var(--llm) 20%,transparent); stroke:var(--llm); }
+        .ex { fill:color-mix(in srgb,var(--exit) 13%,transparent); stroke:var(--exit); }
+        .okb{ fill:color-mix(in srgb,var(--ok) 15%,transparent); stroke:var(--ok); stroke-width:1.8; }
+        .t  { fill:var(--ink); font-family:var(--sans); font-size:14px; font-weight:600; }
+        .d  { fill:var(--ink-soft); font-family:var(--sans); font-size:11.5px; }
+        .l  { fill:var(--ink-soft); font-family:var(--sans); font-size:11px; font-style:italic; }
+        .ln { stroke:currentColor; stroke-width:1.5; fill:none; opacity:.55; }
+        .lx { stroke:var(--exit); stroke-width:1.5; fill:none; opacity:.8; }
+      </style>
+
+      <!-- 1 question -->
+      <rect class="b cd" x="150" y="24" width="300" height="46"/>
+      <text class="t" x="300" y="44" text-anchor="middle">Question</text>
+      <text class="d" x="300" y="60" text-anchor="middle">plus up to four previous turns</text>
+
+      <path class="ln" d="M300 70 V104" marker-end="url(#a)"/>
+
+      <!-- 2 query understanding -->
+      <rect class="b ml" x="150" y="104" width="300" height="62"/>
+      <text class="t" x="300" y="124" text-anchor="middle">Query understanding</text>
+      <text class="d" x="300" y="140" text-anchor="middle">constrained JSON → intent, district</text>
+      <text class="d" x="300" y="156" text-anchor="middle">district re-spelled in Python, not trusted</text>
+
+      <path class="ln" d="M300 166 V204" marker-end="url(#a)"/>
+      <text class="l" x="308" y="188">structured intent</text>
+
+      <!-- exit 1 -->
+      <path class="lx" d="M450 135 H532 V178 H556" marker-end="url(#ax)"/>
+      <path class="lx" d="M450 227 H532 V198 H556" marker-end="url(#ax)"/>
+      <rect class="b ex" x="560" y="160" width="270" height="54"/>
+      <text class="t" x="695" y="182" text-anchor="middle">Refusal</text>
+      <text class="d" x="695" y="199" text-anchor="middle">names what it does cover</text>
+      <text class="l" x="458" y="128">out of scope</text>
+      <text class="l" x="458" y="243">no such district</text>
+
+      <!-- 3 retrieval -->
+      <rect class="b cd" x="150" y="204" width="300" height="46"/>
+      <text class="t" x="300" y="224" text-anchor="middle">Retrieval</text>
+      <text class="d" x="300" y="240" text-anchor="middle">a dictionary lookup on the intent — no model</text>
+
+      <path class="ln" d="M240 250 V270 H195 V292" marker-end="url(#a)"/>
+      <path class="ln" d="M360 250 V270 H405 V292" marker-end="url(#a)"/>
+      <text class="l" x="96" y="284">how much water</text>
+      <text class="l" x="414" y="284">quality · causes</text>
+
+      <!-- 3a / 3b -->
+      <rect class="b cd" x="110" y="292" width="170" height="78"/>
+      <text class="t" x="195" y="312" text-anchor="middle">PostgreSQL</text>
+      <text class="d" x="195" y="329" text-anchor="middle">36,879 readings</text>
+      <text class="d" x="195" y="345" text-anchor="middle">1,607 stations</text>
+      <text class="d" x="195" y="361" text-anchor="middle">exact, with a date</text>
+
+      <rect class="b cd" x="320" y="292" width="170" height="78"/>
+      <text class="t" x="405" y="312" text-anchor="middle">CGWB report</text>
+      <text class="d" x="405" y="329" text-anchor="middle">178 passages</text>
+      <text class="d" x="405" y="345" text-anchor="middle">dot product, then</text>
+      <text class="d" x="405" y="361" text-anchor="middle">rerank by district</text>
+
+      <path class="ln" d="M195 370 V392 H300 V406" marker-end="url(#a)"/>
+      <path class="ln" d="M405 370 V392 H300" />
+
+      <!-- 4 calculation -->
+      <rect class="b cd" x="150" y="406" width="300" height="52"/>
+      <text class="t" x="300" y="426" text-anchor="middle">Calculation</text>
+      <text class="d" x="300" y="443" text-anchor="middle">numpy projection + its caveats — projections only</text>
+
+      <path class="ln" d="M300 458 V500" marker-end="url(#a)"/>
+      <text class="l" x="308" y="482">figures, and a source for each</text>
+
+      <!-- 5 response -->
+      <rect class="b ml" x="150" y="500" width="300" height="52"/>
+      <text class="t" x="300" y="520" text-anchor="middle">Response</text>
+      <text class="d" x="300" y="537" text-anchor="middle">writes prose around figures it was handed</text>
+
+      <path class="ln" d="M300 552 V594" marker-end="url(#a)"/>
+      <text class="l" x="308" y="576">draft</text>
+
+      <!-- 5 → exit 2 -->
+      <path class="lx" d="M450 526 H520 V836 H560" marker-end="url(#ax)"/>
+      <text class="l" x="458" y="519">unparsable ×3</text>
+
+      <!-- 6 checks -->
+      <rect class="b cd" x="150" y="594" width="300" height="74"/>
+      <text class="t" x="300" y="614" text-anchor="middle">Eight checks — blocking</text>
+      <text class="d" x="300" y="631" text-anchor="middle">citations · figures · districts · years</text>
+      <text class="d" x="300" y="647" text-anchor="middle">units · percentages · statewide counts</text>
+      <text class="d" x="300" y="663" text-anchor="middle">plus a model reviewer, advisory only</text>
+
+      <path class="ln" d="M300 668 V706" marker-end="url(#a)"/>
+
+      <!-- 7 decision -->
+      <rect class="b cd" x="150" y="706" width="300" height="44"/>
+      <text class="t" x="300" y="733" text-anchor="middle">Anything unsupported?</text>
+
+      <!-- 7 → rewrite -->
+      <path class="lx" d="M450 728 H560" marker-end="url(#ax)"/>
+      <text class="l" x="462" y="721">yes</text>
+      <rect class="b ex" x="560" y="706" width="270" height="44"/>
+      <text class="t" x="695" y="733" text-anchor="middle">Rewrite — once</text>
+
+      <!-- rewrite loops back into the checks -->
+      <path class="lx" d="M830 706 V631 H460" marker-end="url(#ax)"/>
+      <text class="l" x="600" y="624">re-checked, never trusted</text>
+
+      <!-- rewrite → exit 2 -->
+      <path class="lx" d="M695 750 V800" marker-end="url(#ax)"/>
+      <text class="l" x="703" y="778">still failing</text>
+
+      <!-- exit 2 -->
+      <rect class="b ex" x="560" y="800" width="270" height="72"/>
+      <text class="t" x="695" y="822" text-anchor="middle">The data itself</text>
+      <text class="d" x="695" y="839" text-anchor="middle">figures and passages, shown raw</text>
+      <text class="d" x="695" y="855" text-anchor="middle">and marked unverified</text>
+
+      <!-- 7 → assemble -->
+      <path class="ln" d="M300 750 V800" marker-end="url(#a)"/>
+      <text class="l" x="308" y="778">no</text>
+
+      <!-- 9 assemble -->
+      <rect class="b cd" x="150" y="800" width="300" height="52"/>
+      <text class="t" x="300" y="820" text-anchor="middle">Assembly</text>
+      <text class="d" x="300" y="837" text-anchor="middle">citations, chart and map — built from the data</text>
+
+      <path class="ln" d="M300 852 V900" marker-end="url(#a)"/>
+
+      <!-- 10 answer -->
+      <rect class="b okb" x="150" y="900" width="300" height="52"/>
+      <text class="t" x="300" y="920" text-anchor="middle">Answer</text>
+      <text class="d" x="300" y="937" text-anchor="middle">every figure traced to a source</text>
+
+      <!-- streaming note -->
+      <path class="ln" d="M120 116 V926" stroke-dasharray="4 5"/>
+      <text class="l" x="112" y="500" text-anchor="end" transform="rotate(-90 112 500)">each step reports itself as it runs</text>
+    </svg>
+
+    <figcaption>
+      Every stage announces itself while it works, so the wait is legible rather than blank. Three of the five pipeline stages — retrieval, calculation and verification — never call a language model; the model understands the question and writes the sentence, and supplies no number at any point.
+    </figcaption>
+  </figure>
+
+  <h2>The three ways it stops early</h2>
+  <p>All of them are reached by design, and none shows an unverified answer as though it were verified.</p>
+  <ul>
+    <li><strong>Refusal.</strong> The question is not about Punjab groundwater, or names a district the data does not cover. It says what it does cover instead of guessing.</li>
+    <li><strong>The data itself.</strong> Either the model produced nothing parsable three times running, or a figure survived the rewrite still unsupported. The retrieved rows and passages are shown raw, marked unverified — a model that rambled has not made the data worse.</li>
+    <li><strong>Rewrite, then re-check.</strong> A draft with a problem gets exactly one more attempt, and the result is checked again from scratch. If the rewrite introduces a fault the original did not have, the original is kept: the advisory reviewer must not be able to veto a correct answer.</li>
+  </ul>
+
+  <h2>Why the split at retrieval matters</h2>
+  <p>The database knows <em>how much</em> water there is. It holds no water-quality data at all. So a question about drinking safety goes to the report, and a question about a level goes to SQL — and <strong>a numeric question never goes to the report</strong>, because retrieving prose about a figure loses the station and the date that make the figure checkable.</p>
+
+  <h2>What the model is never allowed to do</h2>
+  <p>It does not supply a number, choose what data to fetch, do the arithmetic, decide whether a chart appears, or have the final say on whether an answer is sound. Given a field called <code>projected_year</code> it once cited the field name as a source, so fields the checks need are withheld from it entirely.</p>
+</div>
+</body>
+</html>
