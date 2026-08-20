@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from sqlalchemy.orm import Session
 
 from app.agents.calculation import calculation_agent
-from app.agents.grounding import grounding_issues
+from app.agents.grounding import CHECK_COUNT, grounding_issues
 from app.agents.query_understanding import QueryIntent, query_understanding_agent
 from app.agents.response import response_agent
 from app.agents.retrieval import retrieval_agent
@@ -310,7 +310,7 @@ def _retrieved_summary(raw_data: dict) -> str:
 
 def _checking_summary(draft: str) -> str:
     figures = len(re.findall(r"(?<![\d.])-?\d+(?:\.\d+)?", draft))
-    return f"7 checks over {figures} figure{'' if figures == 1 else 's'}"
+    return f"{CHECK_COUNT} checks over {figures} figure{'' if figures == 1 else 's'}"
 
 
 def _verified_summary(raw_data: dict) -> str:

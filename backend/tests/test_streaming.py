@@ -182,3 +182,29 @@ def test_the_intent_summary_names_the_district():
 
 def test_the_intent_summary_survives_a_question_naming_no_district():
     assert orch._intent_summary(QueryIntent(intent="ranking")) == "ranking across Punjab"
+
+
+# --------------------------------------------------------------------------
+# The count on screen must be the count that runs
+# --------------------------------------------------------------------------
+
+
+def test_the_advertised_check_count_matches_the_checks_that_exist():
+    """The progress line reports this number to the user. It read "7 checks"
+    for a while after check 8 was added - caught in a screenshot, not by a
+    test, which is the reason this one exists."""
+    import pathlib
+    import re
+
+    from app.agents.grounding import CHECK_COUNT
+
+    source = pathlib.Path(orch.__file__).parent / "grounding.py"
+    numbered = re.findall(r"^    # --- (\d+)\.", source.read_text(encoding="utf-8"), re.M)
+    assert len(numbered) == CHECK_COUNT
+    assert [int(n) for n in numbered] == list(range(1, CHECK_COUNT + 1))
+
+
+def test_the_checking_line_says_the_real_number():
+    from app.agents.grounding import CHECK_COUNT
+
+    assert f"{CHECK_COUNT} checks" in orch._checking_summary("15.91 m in 2024")

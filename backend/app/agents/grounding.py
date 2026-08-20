@@ -20,6 +20,11 @@ from app.scripts.districts import CANONICAL_DISTRICTS, variants_of
 # Sources an answer may legitimately name without them appearing as data values.
 ALLOWED_SOURCES = {"cgwb", "punjab", "india", "district", "average", "mean"}
 
+# How many blocking checks run below. Named here, beside them, because the
+# progress stream reports the number on screen - and it said "7 checks" for a
+# while after check 8 was added, which a screenshot caught and no test did.
+CHECK_COUNT = 8
+
 # Tolerance for a cited number matching a value in the data. Generous enough
 # that sensible rounding passes, tight enough that a wrong figure does not.
 ABS_TOLERANCE = 0.055
