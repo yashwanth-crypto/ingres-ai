@@ -2,15 +2,30 @@
 
 Conversational assistant over real CGWB groundwater data for Punjab. Ask a
 plain-English question about a district, get a grounded, cited answer with a
-chart or map. Built as a 5-agent pipeline — query understanding → retrieval →
-calculation → verification → response.
+chart or map. Built as a five-stage pipeline — query understanding → retrieval →
+calculation → response → verification. **Three of those five stages call no
+language model at all**: the model understands the question and writes the
+sentence, and supplies no number at any point.
 
 **Status: phases 1–6 complete, not deployed.** Data loaded (1,607 stations,
-36,879 readings 1996–2024, 23 risk categories, 153 assessment blocks), six tool
-endpoints live, the agent pipeline answering every demo question, hybrid
-retrieval over the CGWB report, and a React frontend that draws the answer and
-reports each step of the pipeline as it runs. 133 tests over the deterministic
-core. [HANDOFF.md](HANDOFF.md) has what is still weak.
+36,879 readings 1996–2024, 23 risk categories, 153 assessment blocks), five tool
+endpoints plus `/chat` and `/chat/stream`, the agent pipeline answering every
+demo question, hybrid retrieval over the CGWB report, and a React frontend that
+draws the answer and reports each step of the pipeline as it runs. 133 tests
+over the deterministic core.
+
+### The other documents
+
+| File | For |
+|---|---|
+| [WALKTHROUGH.md](WALKTHROUGH.md) | How a question becomes a checked answer, end to end |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Every file, and the decision behind it |
+| [BACKEND.md](BACKEND.md) | The backend in detail — layers, SQL, the eight checks |
+| [FRONTEND.md](FRONTEND.md) | The frontend in detail — design system, charts, the map |
+| [DEMO.md](DEMO.md) | Runbook: what to ask, in what order, and what breaks |
+| [HANDOFF.md](HANDOFF.md) | What is still weak, and what to do about it |
+
+Read **HANDOFF.md** before claiming anything here is finished.
 
 ---
 
@@ -48,7 +63,12 @@ DATABASE_URL=postgresql://postgres:PASSWORD@localhost:5432/ingres
 If the password contains `@`, `:` or `/`, percent-encode it (`@` → `%40`) —
 those are URL delimiters and will otherwise be parsed as part of the host.
 
-Create the database once:
+Create the database once. **Every Python command in this README runs from
+`backend/`** — `python -m app.…` will not resolve from the repository root:
+
+```bash
+cd backend
+```
 
 ```bash
 python -m app.scripts.create_db
@@ -57,8 +77,6 @@ python -m app.scripts.create_db
 ---
 
 ## Phase 1 — data ingestion
-
-Everything runs from the `backend/` directory.
 
 ### 1. The raw CSVs
 
@@ -345,7 +363,7 @@ Set `LLM_PROVIDER` in `.env`:
 | `ollama` | `qwen2.5:7b-instruct` | free | Local, works offline — covers spec §13's venue-wifi risk |
 | `anthropic` | `claude-opus-5` | ~$0.02/question | Stronger verification; use for the demo |
 
-The five agents are identical either way; only the backend call differs.
+The agents are identical either way; only the call inside the LLM client differs.
 Ollama's JSON-schema mode and the Claude API's structured outputs both return
 a validated Pydantic object, so no agent ever parses free text.
 
@@ -469,9 +487,9 @@ backend/
     config.py          settings from env
     database.py        SQLAlchemy engine + session
     models.py          ORM models mirroring schema.sql
-    routers/           Phase 2 — tool endpoints, /chat, /health
-    agents/            Phase 3 — the 5-agent pipeline
-    services/          Phase 3 — LLM client, groundwater service
+    routers/           tool endpoints, /chat, /chat/stream, /health
+    agents/            six agents + the orchestrator that wires them
+    services/          LLM client, groundwater service, document search
     scripts/
       schema.sql       table definitions
       districts.py     canonical Punjab districts + spelling variants
@@ -479,8 +497,40 @@ backend/
   data/raw/            raw CSVs (gitignored)
   data/rag/            committed chunk + vector index
   tests/               pytest over the deterministic pieces
-frontend/              Phase 4
+frontend/              React app — see FRONTEND.md
 ```
+
+## Phase 4 — the frontend
+
+From `frontend/`, once:
+
+```bash
+npm install
+```
+
+Then, with the API already running on port 8000:
+
+```bash
+npm run dev
+```
+
+Open **http://localhost:5173**. In development Vite proxies `/api` to
+`127.0.0.1:8000`, so the browser makes no cross-origin request and CORS never
+comes into it.
+
+The header dot is a live `/health` check: green means the database answered and
+the model is reachable. The first question after a cold start takes about 45
+seconds while the local model loads into VRAM; every one after that is fast.
+
+React, Recharts and Leaflet, with Tailwind — no component library, no state
+manager, no webfont. [FRONTEND.md](FRONTEND.md) covers the components, the
+three visualisations and the design decisions.
+
+> **One question at a time.** Nothing queues requests in front of the model, and
+> two at once degrade badly — a question that answers in 13 seconds took 183
+> with a second in flight.
+
+---
 
 ## Build order
 
