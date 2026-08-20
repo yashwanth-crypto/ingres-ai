@@ -14,6 +14,13 @@ demo question, hybrid retrieval over the CGWB report, and a React frontend that
 draws the answer and reports each step of the pipeline as it runs. 133 tests
 over the deterministic core.
 
+<p align="center">
+  <img src="docs/flow.png" alt="How a question flows through the pipeline: query understanding, retrieval from either PostgreSQL or the CGWB report, calculation, response, eight blocking checks, and assembly — with three early exits" width="720">
+</p>
+
+<p align="center"><em>What happens when you ask a question. Sand = calls a language
+model, teal = plain code, amber = the answer stops early.</em></p>
+
 ### The other documents
 
 | File | For |
@@ -178,6 +185,13 @@ stage-of-extraction thresholds.
 > caught it. If this data is ever re-extracted, run that check again.
 
 Result: **20 districts over-exploited, 3 safe** (Fazilka, Muktsar, Pathankot).
+
+<p align="center">
+  <img src="docs/punjab.png" alt="Punjab traced by its 1,606 monitoring stations, with districts marked by CGWB category" width="440">
+</p>
+
+<p align="center"><em>Punjab's outline here is not a boundary file — it is the
+1,606 monitoring stations themselves, and the cloud they make.</em></p>
 
 ### Re-deriving the risk categories (only if needed)
 
@@ -513,6 +527,27 @@ Then, with the API already running on port 8000:
 ```bash
 npm run dev
 ```
+
+### Screenshots
+
+There are none in this README yet, and they are the fastest thing you could add.
+Run the app, ask the four questions below, and drop the images into `docs/`:
+
+| Ask | Shows | Save as |
+|---|---|---|
+| *What is the groundwater status in Bathinda?* | The trend chart, drawn as a cross-section | `docs/shot-trend.png` |
+| *Which district has the worst water table?* | Ranked bars and the district map | `docs/shot-bars.png` |
+| *How many years until Ludhiana hits critical depth?* | The projection, dashed to the 30 m line | `docs/shot-projection.png` |
+| *Is the water in Bathinda safe to drink?* | The report path, cited to a page | `docs/shot-report.png` |
+
+Then reference them here with `![](docs/shot-trend.png)`. Crop to the browser
+content — nobody needs your taskbar.
+
+The one worth catching is the **progress list mid-answer**, while the steps are
+still building. It is the only image that shows the verification happening
+rather than being claimed.
+
+---
 
 Open **http://localhost:5173**. In development Vite proxies `/api` to
 `127.0.0.1:8000`, so the browser makes no cross-origin request and CORS never
