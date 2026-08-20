@@ -528,24 +528,41 @@ Then, with the API already running on port 8000:
 npm run dev
 ```
 
-### Screenshots
+### What it looks like
 
-There are none in this README yet, and they are the fastest thing you could add.
-Run the app, ask the four questions below, and drop the images into `docs/`:
+<p align="center">
+  <img src="docs/shot-progress.png" alt="Mid-answer: the pipeline reporting each step — understood, retrieved 3 passages from pages 11 and 58, checking every figure" width="720">
+</p>
 
-| Ask | Shows | Save as |
-|---|---|---|
-| *What is the groundwater status in Bathinda?* | The trend chart, drawn as a cross-section | `docs/shot-trend.png` |
-| *Which district has the worst water table?* | Ranked bars and the district map | `docs/shot-bars.png` |
-| *How many years until Ludhiana hits critical depth?* | The projection, dashed to the 30 m line | `docs/shot-projection.png` |
-| *Is the water in Bathinda safe to drink?* | The report path, cited to a page | `docs/shot-report.png` |
+<p align="center"><em>Every answer reports its own work while it runs. This is the
+verification happening, not a claim that it did.</em></p>
 
-Then reference them here with `![](docs/shot-trend.png)`. Crop to the browser
-content — nobody needs your taskbar.
+<p align="center">
+  <img src="docs/shot-projection.png" alt="Ludhiana depth to water: measured 1999 to 2024, then a dashed projection into a shaded future, reaching the 30 m reference depth around 2044" width="720">
+</p>
 
-The one worth catching is the **progress list mid-answer**, while the steps are
-still building. It is the only image that shows the verification happening
-rather than being claimed.
+<p align="center"><em>The axis is inverted, so a falling line means a falling water
+table. The projection runs dashed into a shaded future and stops where it crosses
+30 m — a stated pumping limit, not a CGWB threshold, and the caption says so.</em></p>
+
+<p align="center">
+  <img src="docs/shot-bars.png" alt="Districts ranked worst first by depth to water, Barnala at 43.22 m highlighted, the rest dimmed" width="720">
+</p>
+
+<p align="center"><em>A superlative names no district, so every district is ranked.
+The one that answers the question is held at full strength.</em></p>
+
+<p align="center">
+  <img src="docs/shot-map.png" alt="Punjab districts marked over-exploited, with a note that Malerkotla is categorised but not plotted" width="720">
+</p>
+
+<p align="center"><em>Nineteen pins beside a figure of twenty, and a footnote saying
+why: Malerkotla is categorised by CGWB and has no monitoring stations. The system
+names what it cannot show.</em></p>
+
+<p align="center">
+  <img src="docs/shot-landing.png" alt="Landing page: an animated aquifer cross-section with the water table falling, and the headline counts" width="720">
+</p>
 
 ---
 
