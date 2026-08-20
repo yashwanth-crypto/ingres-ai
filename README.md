@@ -14,12 +14,14 @@ demo question, hybrid retrieval over the CGWB report, and a React frontend that
 draws the answer and reports each step of the pipeline as it runs. 133 tests
 over the deterministic core.
 
-<p align="center">
-  <img src="docs/flow.png" alt="How a question flows through the pipeline: query understanding, retrieval from either PostgreSQL or the CGWB report, calculation, response, eight blocking checks, and assembly — with three early exits" width="720">
-</p>
+![How a question flows through the pipeline: query understanding, retrieval from either PostgreSQL or the CGWB report, calculation, response, eight blocking checks, and assembly — with three early exits](docs/flow.png)
 
-<p align="center"><em>What happens when you ask a question. Sand = calls a language
-model, teal = plain code, amber = the answer stops early.</em></p>
+*What happens when you ask a question. Sand = calls a language model, teal = plain code, amber = the answer stops early.*
+
+![The pipeline reporting each step mid-answer: understood, retrieved 3 passages from pages 11 and 58, checking every figure](docs/shot-progress.png)
+
+*Every answer reports its own work while it runs — this is the verification
+happening, not a claim that it did. More screenshots below.*
 
 ### The other documents
 
@@ -186,12 +188,9 @@ stage-of-extraction thresholds.
 
 Result: **20 districts over-exploited, 3 safe** (Fazilka, Muktsar, Pathankot).
 
-<p align="center">
-  <img src="docs/punjab.png" alt="Punjab traced by its 1,606 monitoring stations, with districts marked by CGWB category" width="440">
-</p>
+![Punjab traced by its 1,606 monitoring stations, with districts marked by CGWB category](docs/punjab.png)
 
-<p align="center"><em>Punjab's outline here is not a boundary file — it is the
-1,606 monitoring stations themselves, and the cloud they make.</em></p>
+*Punjab's outline here is not a boundary file — it is the 1,606 monitoring stations themselves, and the cloud they make.*
 
 ### Re-deriving the risk categories (only if needed)
 
@@ -530,39 +529,19 @@ npm run dev
 
 ### What it looks like
 
-<p align="center">
-  <img src="docs/shot-progress.png" alt="Mid-answer: the pipeline reporting each step — understood, retrieved 3 passages from pages 11 and 58, checking every figure" width="720">
-</p>
+![Ludhiana depth to water: measured 1999 to 2024, then a dashed projection into a shaded future, reaching the 30 m reference depth around 2044](docs/shot-projection.png)
 
-<p align="center"><em>Every answer reports its own work while it runs. This is the
-verification happening, not a claim that it did.</em></p>
+*The axis is inverted, so a falling line means a falling water table. The projection runs dashed into a shaded future and stops where it crosses 30 m — a stated pumping limit, not a CGWB threshold, and the caption says so.*
 
-<p align="center">
-  <img src="docs/shot-projection.png" alt="Ludhiana depth to water: measured 1999 to 2024, then a dashed projection into a shaded future, reaching the 30 m reference depth around 2044" width="720">
-</p>
+![Districts ranked worst first by depth to water, Barnala at 43.22 m highlighted, the rest dimmed](docs/shot-bars.png)
 
-<p align="center"><em>The axis is inverted, so a falling line means a falling water
-table. The projection runs dashed into a shaded future and stops where it crosses
-30 m — a stated pumping limit, not a CGWB threshold, and the caption says so.</em></p>
+*A superlative names no district, so every district is ranked. The one that answers the question is held at full strength.*
 
-<p align="center">
-  <img src="docs/shot-bars.png" alt="Districts ranked worst first by depth to water, Barnala at 43.22 m highlighted, the rest dimmed" width="720">
-</p>
+![Punjab districts marked over-exploited, with a note that Malerkotla is categorised but not plotted](docs/shot-map.png)
 
-<p align="center"><em>A superlative names no district, so every district is ranked.
-The one that answers the question is held at full strength.</em></p>
+*Nineteen pins beside a figure of twenty, and a footnote saying why: Malerkotla is categorised by CGWB and has no monitoring stations. The system names what it cannot show.*
 
-<p align="center">
-  <img src="docs/shot-map.png" alt="Punjab districts marked over-exploited, with a note that Malerkotla is categorised but not plotted" width="720">
-</p>
-
-<p align="center"><em>Nineteen pins beside a figure of twenty, and a footnote saying
-why: Malerkotla is categorised by CGWB and has no monitoring stations. The system
-names what it cannot show.</em></p>
-
-<p align="center">
-  <img src="docs/shot-landing.png" alt="Landing page: an animated aquifer cross-section with the water table falling, and the headline counts" width="720">
-</p>
+![Landing page: an animated aquifer cross-section with the water table falling, and the headline counts](docs/shot-landing.png)
 
 ---
 
